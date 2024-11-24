@@ -7,31 +7,61 @@ import random
 
 
 class ReplayBuffer:
-  def __init__(self, buffer_size=100000, batch_size=256):
+  def __init__(self, buffer_size=100000, batch_size=256, device="cpu"):
+    """
+    Initialize a replay buffer with a fixed size.
+    Args:
+        buffer_size (int): Maximum number of transitions to store.
+        batch_size (int): Number of transitions to sample during training.
+        device (str): The device ('cpu' or 'cuda') to which tensors will be moved.
+    """
     self.buffer = deque(maxlen=buffer_size)
     self.batch_size = batch_size
+    self.device = device
 
   def store(self, state, action, reward, next_state, done):
+    """
+    Store a single transition in the buffer.
+    Args:
+        state (array-like): The state before the action.
+        action (array-like): The action taken.
+        reward (float): The reward obtained after the action.
+        next_state (array-like): The state after the action.
+        done (bool): Whether the episode ended.
+    """
     self.buffer.append((state, action, reward, next_state, done))
 
   def sample(self):
+    """
+    Sample a batch of transitions from the buffer.
+    Returns:
+        Tuple[torch.Tensor]: Tensors for states, actions, rewards, next states, and done flags.
+    """
     batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size))
     states, actions, rewards, next_states, dones = zip(*batch)
 
+    # Convert to numpy arrays for efficient tensor conversion
     np_states = np.array(states)
     np_actions = np.array(actions)
-    np_rewards = np.array(rewards).reshape(-1, 1)
+    np_rewards = np.array(rewards, dtype=np.float32).reshape(-1, 1)
     np_next_states = np.array(next_states)
-    np_dones = np.array(dones).reshape(-1, 1)
+    np_dones = np.array(dones, dtype=np.float32).reshape(-1, 1)
+
+    # Convert to tensors and move to the specified device
     return (
-        torch.FloatTensor(np_states),
-        torch.FloatTensor(np_actions),
-        torch.FloatTensor(np_rewards),
-        torch.FloatTensor(np_next_states),
-        torch.FloatTensor(np_dones)
+        torch.FloatTensor(np_states).to(self.device),
+        torch.FloatTensor(np_actions).to(self.device),
+        torch.FloatTensor(np_rewards).to(self.device),
+        torch.FloatTensor(np_next_states).to(self.device),
+        torch.FloatTensor(np_dones).to(self.device)
     )
 
   def size(self):
+    """
+    Get the current size of the buffer.
+    Returns:
+        int: The number of transitions stored in the buffer.
+    """
     return len(self.buffer)
 
 
@@ -91,7 +121,7 @@ class Model:
     self.mean_actor.load_state_dict(self.actor.state_dict())
 
     # Replay Buffer
-    self.replay_buffer = ReplayBuffer(buffer_size, batch_size)
+    self.replay_buffer = ReplayBuffer(buffer_size, batch_size, device=self.device)
 
     # Hyperparameters
     self.gamma = gamma

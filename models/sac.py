@@ -104,15 +104,22 @@ class Model:
 
   def sample_replay_buffer(self):
     batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size))
-    states, actions, rewards, next_states, dones = zip(*batch)
+    batch = np.array(batch, dtype=object)  # Convert list of tuples to a numpy array for efficient slicing
 
-    # Convert to tensors and move to device
+    # Efficient slicing for each component
+    states = np.stack(batch[:, 0])  # Stack states into a single array
+    actions = np.stack(batch[:, 1])  # Stack actions
+    rewards = np.array(batch[:, 2], dtype=np.float32).reshape(-1, 1)  # Convert rewards to float and reshape
+    next_states = np.stack(batch[:, 3])  # Stack next states
+    dones = np.array(batch[:, 4], dtype=np.float32).reshape(-1, 1)  # Convert dones to float and reshape
+
+    # Convert to tensors and move to the correct device
     return (
-        torch.FloatTensor(states).to(self.device),
-        torch.FloatTensor(actions).to(self.device),
-        torch.FloatTensor(rewards).unsqueeze(1).to(self.device),
-        torch.FloatTensor(next_states).to(self.device),
-        torch.FloatTensor(dones).unsqueeze(1).to(self.device),
+        torch.from_numpy(states).to(self.device),
+        torch.from_numpy(actions).to(self.device),
+        torch.from_numpy(rewards).to(self.device),
+        torch.from_numpy(next_states).to(self.device),
+        torch.from_numpy(dones).to(self.device),
     )
 
   def update(self):

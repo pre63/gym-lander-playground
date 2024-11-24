@@ -97,13 +97,20 @@ class Model:
     batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size))
     states, actions, rewards, next_states, dones = zip(*batch)
 
-    # Convert to tensors and move to device
+    # Convert to numpy arrays for efficiency
+    np_states = np.stack(states)  # Use np.stack to ensure consistent array shapes
+    np_actions = np.stack(actions)
+    np_rewards = np.array(rewards)  # 1D array is sufficient for rewards
+    np_next_states = np.stack(next_states)
+    np_dones = np.array(dones, dtype=np.float32)  # Convert to float for compatibility
+
+    # Convert to tensors and move to the correct device
     return (
-        torch.FloatTensor(states).to(self.device),
-        torch.FloatTensor(actions).to(self.device),
-        torch.FloatTensor(rewards).unsqueeze(1).to(self.device),
-        torch.FloatTensor(next_states).to(self.device),
-        torch.FloatTensor(dones).unsqueeze(1).to(self.device),
+        torch.FloatTensor(np_states).to(self.device),
+        torch.FloatTensor(np_actions).to(self.device),
+        torch.FloatTensor(np_rewards).unsqueeze(1).to(self.device),  # Add dimension for reward
+        torch.FloatTensor(np_next_states).to(self.device),
+        torch.FloatTensor(np_dones).unsqueeze(1).to(self.device),  # Add dimension for done flags
     )
 
   def update(self):
