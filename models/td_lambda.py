@@ -38,6 +38,7 @@ class Model:
     done = False
     episode_reward = 0
     trajectory = []
+    frames = []
 
     # Reset eligibility traces
     self.eligibility_traces.fill(0)
@@ -73,4 +74,6 @@ class Model:
       })
       episode_reward += reward
 
-    return episode_reward, trajectory
+      frames.append(self.env.render())
+
+    return episode_reward, trajectory, frames

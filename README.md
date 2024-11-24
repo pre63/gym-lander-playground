@@ -15,19 +15,15 @@ This project provides a framework to train and evaluate reinforcement learning (
 - Supports loading and evaluating models on different Gymnasium environments.
 
 ## Installation
-
-1. Install Python 3.8 or higher.
-
-2. Install the dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 
 ### Training a Model
 
-To train the default PPO model on the default environment (`LunarLander-v3`), run:
+To train the default PPO model on the default environment (`LunarLanderContinuous-v3`), run:
 ```bash
 python playground.py ppo 10
 ```

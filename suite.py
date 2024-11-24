@@ -52,7 +52,7 @@ def main():
   reward_strategy_name = "default" if len(sys.argv) < 4 else sys.argv[3]
 
   try:
-    env = gym.make(env_name)
+    env = gym.make(env_name, render_mode="rgb_array")
   except gym.error.Error as e:
     print(f"Error: Unable to create environment '{env_name}'.\n{e}")
     sys.exit(1)

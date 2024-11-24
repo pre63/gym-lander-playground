@@ -191,6 +191,7 @@ class Model:
     done = False
     episode_reward = 0
     trajectory = []
+    frames = []
 
     while not done:
       state_tensor = state.unsqueeze(0)
@@ -212,4 +213,6 @@ class Model:
       episode_reward += reward
       state = next_state
 
-    return episode_reward, trajectory
+      frames.append(self.env.render())
+
+    return episode_reward, trajectory, frames

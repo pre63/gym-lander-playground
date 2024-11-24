@@ -27,6 +27,7 @@ class Model:
     state, _ = self.env.reset()
     episode_reward = 0
     trajectory = []
+    frames = []
     done = False
 
     while not done:
@@ -46,4 +47,6 @@ class Model:
 
       episode_reward += reward
 
-    return episode_reward, trajectory
+      frames.append(self.env.render())
+
+    return episode_reward, trajectory, frames

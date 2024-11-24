@@ -108,6 +108,7 @@ class Model:
     done = False
     episode_reward = 0
     trajectory = []
+    frames = []
 
     while not done:
       # Select an action
@@ -134,7 +135,9 @@ class Model:
       state = next_state
       episode_reward += reward
 
-    return episode_reward, trajectory
+      frames.append(self.env.render())
+
+    return episode_reward, trajectory, frames
 
   def train_step(self):
     """

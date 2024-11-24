@@ -1,76 +1,87 @@
 import os
 import sys
-import json
-import gymnasium as gym
+import numpy as np
+import subprocess
 
 
-def load_results(results_folder):
+def find_best_episode_file(results_folder):
   """
-  Load results, configuration, and best episode data from the specified folder.
+  Find the best_episode.npz file in the given results folder.
   Args:
-      results_folder (str): Path to the folder containing results.
+      results_folder (str): Path to the folder containing the results.
   Returns:
-      config (dict): Configuration used for training.
-      best_episode (dict): Best episode data.
+      str: Path to the best_episode.npz file.
   """
-  try:
-    with open(os.path.join(results_folder, "config.json"), "r") as f:
-      config = json.load(f)
-    with open(os.path.join(results_folder, "best_episode.json"), "r") as f:
-      best_episode = json.load(f)
-    return config, best_episode
-  except FileNotFoundError as e:
-    print(f"Error: {e}")
+  best_episode_file = os.path.join(results_folder, "best_episode.npz")
+  if not os.path.exists(best_episode_file):
+    print(f"Error: File '{best_episode_file}' does not exist in the specified folder.")
     sys.exit(1)
+  return best_episode_file
 
 
 def replay_best_episode(results_folder):
   """
-  Replay the best episode using the saved configuration and results.
+  Replay the best episode using the frames saved in the .npz file and save the video in the results folder.
   Args:
-      results_folder (str): Path to the folder containing results.
+      results_folder (str): Path to the folder containing the results.
   """
-  config, best_episode = load_results(results_folder)
-  env_name = config["environment"]
+  best_episode_file = find_best_episode_file(results_folder)
 
-  print(f"Replaying Best Episode from Episode: {best_episode['episode']} with Reward: {best_episode['reward']}")
+  # Load the RGB frames
+  data = np.load(best_episode_file)
+  if "frames" not in data:
+    print("Error: No 'frames' key found in the best_episode.npz file.")
+    sys.exit(1)
 
-  # Create the environment with rendering
-  env = gym.make(env_name, render_mode="human")  # Requires an environment supporting "human" render mode
+  frames = data["frames"]
+  output_video = os.path.join(results_folder, "best_episode.mp4")
 
-  trajectory = best_episode["trajectory"]
+  try:
+    height, width, _ = frames[0].shape
+    input_file = os.path.join(results_folder, "temp_frames.raw")
 
-  state = trajectory[0]["state"]  # Initial state
-  env.reset()  # Reset environment (required before stepping)
-  env.env.state = state  # Manually set the initial state if supported
+    # Save raw RGB frames to a binary file
+    with open(input_file, "wb") as f:
+      for frame in frames:
+        f.write(frame.tobytes())
 
-  for step in trajectory:
-    action = step["action"]
-    reward = step["reward"]
-    done = step["done"]
+    # Use FFmpeg to convert the raw RGB file into a playable MP4 video
+    # The key change here is explicitly specifying the duration and proper frame data
+    subprocess.run([
+        "ffmpeg",
+        "-y",  # Overwrite existing files
+        "-f", "rawvideo",
+        "-pixel_format", "rgb24",
+        "-video_size", f"{width}x{height}",
+        "-framerate", "30",  # Ensures the correct video length
+        "-i", input_file,
+        "-vcodec", "libx264",
+        "-pix_fmt", "yuv420p",  # Ensure compatibility
+        "-loglevel", "error",  # Suppress verbose output
+        output_video
+    ], check=True)
 
-    if done:
-      print(f"Reward: {reward}, Done")
-    else:
-      print(f"Reward: {reward}")
+    print(f"Video saved at: {output_video}")
 
-    env.render()
-    _, _, _, _, _ = env.step(action)
+    # Play the video using an external player (e.g., ffplay)
+    subprocess.run(["ffplay", "-autoexit", "-loglevel", "error", output_video], check=True)
 
-    if done:
-      break
-
-  env.close()
-  print("Replay completed.")
+  except Exception as e:
+    print(f"Error during replay: {e}")
+    sys.exit(1)
+  finally:
+    # Cleanup temporary raw file
+    if os.path.exists(input_file):
+      os.remove(input_file)
 
 
 def main():
   if len(sys.argv) < 2:
-    print("Usage: python replay.py [path-to-result-folder]")
+    print("Usage: python replay.py [path-to-results-folder]")
     sys.exit(1)
 
   results_folder = sys.argv[1]
-  if not os.path.exists(results_folder):
+  if not os.path.isdir(results_folder):
     print(f"Error: Folder '{results_folder}' does not exist.")
     sys.exit(1)
 

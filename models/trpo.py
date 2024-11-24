@@ -38,6 +38,7 @@ class Model:
     done = False
     episode_reward = 0
     trajectory = []
+    frames = []
 
     while not done:
       action, _ = self.model.predict(state, deterministic=False)
@@ -54,7 +55,9 @@ class Model:
       episode_reward += reward
       state = next_state
 
+      frames.append(self.env.render())
+
     # Perform a learning step with a fixed number of timesteps
     self.model.learn(total_timesteps=1000, reset_num_timesteps=False)
 
-    return episode_reward, trajectory
+    return episode_reward, trajectory, frames

@@ -1,24 +1,11 @@
-"""
-Parallel training script
-
-for model in ppo sac td3 totd trpo ddpg laber mac 
-    for episodes in 10 100 200 500 1000 2000
-        for strategy in default proximity energy_efficient combined
-            python playground.py $model $episodes $strategy &
-        end
-    end
-end
-wait
-
-
-"""
-
 import os
 import sys
+import numpy as np
 import importlib
 import json
 from datetime import datetime
 import gymnasium as gym
+from gymnasium.wrappers import RecordVideo
 from reward import REWARD_STRATEGIES
 
 
@@ -103,7 +90,7 @@ def main():
   ModelClass = load_model(model_name)
 
   try:
-    env = gym.make(env_name)
+    env = gym.make(env_name, render_mode="rgb_array")
   except gym.error.Error as e:
     print(f"Error: Unable to create environment '{env_name}'.\n{e}")
     sys.exit(1)
@@ -124,11 +111,12 @@ def run_model(model, num_episodes, results_folder, env):
 
   for episode in range(num_episodes):
     # Get data from model.train() which handles the episode logic
-    episode_reward, trajectory = model.train()
+    episode_reward, trajectory, frames = model.train()
     all_rewards.append(episode_reward)
 
     # Update best episode if this one has a higher reward
     if episode_reward > best_episode["reward"]:
+      np.savez_compressed(os.path.join(results_folder, f"best_episode.npz"), frames=np.array(frames))
       best_episode.update({
           "episode": episode,
           "reward": episode_reward,

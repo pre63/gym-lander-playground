@@ -36,6 +36,7 @@ class Model:
     done = False
     episode_reward = 0
     trajectory = []
+    frames = []
 
     while not done:
       # Take the action and observe the next state and reward
@@ -62,4 +63,6 @@ class Model:
       })
       episode_reward += reward
 
-    return episode_reward, trajectory
+      frames.append(self.env.render())
+
+    return episode_reward, trajectory, frames
