@@ -17,12 +17,18 @@ class ReplayBuffer:
   def sample(self):
     batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size))
     states, actions, rewards, next_states, dones = zip(*batch)
+
+    np_states = np.array(states)
+    np_actions = np.array(actions)
+    np_rewards = np.array(rewards).reshape(-1, 1)
+    np_next_states = np.array(next_states)
+    np_dones = np.array(dones).reshape(-1, 1)
     return (
-        torch.FloatTensor(states),
-        torch.FloatTensor(actions),
-        torch.FloatTensor(rewards).unsqueeze(1),
-        torch.FloatTensor(next_states),
-        torch.FloatTensor(dones).unsqueeze(1),
+        torch.FloatTensor(np_states),
+        torch.FloatTensor(np_actions),
+        torch.FloatTensor(np_rewards),
+        torch.FloatTensor(np_next_states),
+        torch.FloatTensor(np_dones)
     )
 
   def size(self):

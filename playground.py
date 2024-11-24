@@ -1,12 +1,15 @@
 """
 Parallel training script
 
-for model in totd trpo ddpg laber mac ppo sac td3
-    for episodes in 100 200 500 1000 2000
-        python playground.py $model $episodes &
+for model in ppo sac td3 totd trpo ddpg laber mac 
+    for episodes in 10 100 200 500 1000 2000
+        for strategy in default proximity energy_efficient combined
+            python playground.py $model $episodes $strategy &
+        end
     end
 end
 wait
+
 
 """
 
@@ -62,7 +65,7 @@ def wrap_environment(env, reward_strategy):
 
     def step(self, action):
       state, reward, terminated, truncated, info = self.env.step(action)
-      custom_reward = self.reward_fn(state,reward, action, terminated or truncated, info)
+      custom_reward = self.reward_fn(state, reward, action, terminated or truncated, info)
       return state, custom_reward, terminated, truncated, info
 
   return RewardWrapper(env, reward_strategy)

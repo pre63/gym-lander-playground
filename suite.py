@@ -49,6 +49,8 @@ def main():
   # Use LunarLanderContinuous-v3 as the default environment, allow override
   env_name = sys.argv[2] if len(sys.argv) > 2 else "LunarLanderContinuous-v3"
 
+  reward_strategy_name = "default" if len(sys.argv) < 4 else sys.argv[3]
+
   try:
     env = gym.make(env_name)
   except gym.error.Error as e:
@@ -56,14 +58,21 @@ def main():
     sys.exit(1)
 
   # Wrap environment with selected reward strategy
-  reward_strategy = REWARD_STRATEGIES.get("default")
+  reward_strategy = REWARD_STRATEGIES.get(reward_strategy_name)
   env = wrap_environment(env, reward_strategy)
 
   models = initiate_models(env)
 
   for model_name, model in models:
     print(f"Training {model_name} for {num_episodes} episodes on {env_name} environment.")
-    config = {"model": model_name, "episodes": num_episodes, "environment": env_name}
+
+    config = {
+        "model": model_name,
+        "episodes": num_episodes,
+        "reward_strategy": reward_strategy_name,
+        "environment": env_name,
+    }
+
     results_folder = create_results_folder(model_name, config)
     run_model(model, num_episodes, results_folder, env)
 
