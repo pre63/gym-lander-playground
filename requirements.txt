@@ -1,0 +1,9 @@
+gymnasium
+gymnasium[box2d]
+stable-baselines3
+sb3-contrib
+numpy
+swig
+pandas
+jupyter
+ipykernel

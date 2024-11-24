@@ -1,0 +1,190 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from collections import deque
+import random
+
+
+class ReplayBuffer:
+  def __init__(self, buffer_size=100000, batch_size=256, large_batch_multiplier=4):
+    self.buffer = deque(maxlen=buffer_size)
+    self.batch_size = batch_size
+    self.large_batch_size = batch_size * large_batch_multiplier
+
+  def store(self, state, action, reward, next_state, done):
+    self.buffer.append((state, action, reward, next_state, done))
+
+  def sample_large_batch(self):
+    return random.sample(self.buffer, min(len(self.buffer), self.large_batch_size))
+
+  def sample_prioritized_batch(self, priorities):
+    probabilities = priorities / np.sum(priorities)
+    indices = np.random.choice(len(priorities), size=self.batch_size, p=probabilities)
+    return indices
+
+  def size(self):
+    return len(self.buffer)
+
+  def get_samples_by_indices(self, indices):
+    return [self.buffer[i] for i in indices]
+
+
+class Actor(nn.Module):
+  def __init__(self, state_dim, action_dim, max_action):
+    super(Actor, self).__init__()
+    self.net = nn.Sequential(
+        nn.Linear(state_dim, 256),
+        nn.ReLU(),
+        nn.Linear(256, 256),
+        nn.ReLU(),
+        nn.Linear(256, action_dim),
+        nn.Tanh()
+    )
+    self.max_action = max_action
+
+  def forward(self, state):
+    return self.net(state) * self.max_action
+
+
+class Critic(nn.Module):
+  def __init__(self, state_dim, action_dim):
+    super(Critic, self).__init__()
+    self.net = nn.Sequential(
+        nn.Linear(state_dim + action_dim, 256),
+        nn.ReLU(),
+        nn.Linear(256, 256),
+        nn.ReLU(),
+        nn.Linear(256, 1)
+    )
+
+  def forward(self, state, action):
+    return self.net(torch.cat([state, action], dim=1))
+
+
+class Model:
+  def __init__(self, env, buffer_size=100000, batch_size=256, gamma=0.99, tau=0.005, actor_lr=3e-4, critic_lr=3e-4, alpha=0.2):
+    self.env = env
+    self.state_dim = env.observation_space.shape[0]
+    self.action_dim = env.action_space.shape[0]
+    self.max_action = env.action_space.high[0]
+
+    # Networks
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
+    self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
+
+    self.critic = Critic(self.state_dim, self.action_dim).to(device)
+    self.target_critic = Critic(self.state_dim, self.action_dim).to(device)
+    self.target_critic.load_state_dict(self.critic.state_dict())
+    self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_lr)
+
+    # Replay Buffer
+    self.replay_buffer = ReplayBuffer(buffer_size, batch_size)
+
+    # Hyperparameters
+    self.gamma = gamma
+    self.tau = tau
+    self.alpha = alpha
+
+  def store_transition(self, state, action, reward, next_state, done):
+    self.replay_buffer.store(state, action, reward, next_state, done)
+
+  def sample_large_batch(self):
+    return self.replay_buffer.sample_large_batch()
+
+  def train(self):
+    """
+    Train the model for one episode and return the episode reward and rewards per step.
+
+    Returns:
+        episode_reward (float): Total reward obtained in the episode.
+        trajectory (list): The trajectory of the agent..
+    """
+    state, _ = self.env.reset()
+    done = False
+    episode_reward = 0
+    trajectory = []
+
+    while not done:
+      # Select an action
+      state_tensor = torch.FloatTensor(state).unsqueeze(0)
+      action = self.actor(state_tensor).detach().numpy()[0]
+      next_state, reward, terminated, truncated, _ = self.env.step(action)
+      done = terminated or truncated
+
+      # Store transition in the replay buffer
+      self.store_transition(state, action, reward, next_state, done)
+
+      # Perform training step
+      self.train_step()
+
+      # Update state and rewards
+      trajectory.append({
+          "state": state.tolist(),
+          "action": action.tolist(),
+          "reward": reward,
+          "next_state": next_state.tolist(),
+          "done": done
+      })
+      state = next_state
+      episode_reward += reward
+
+    return episode_reward, trajectory
+
+  def train_step(self):
+    """
+    Perform a single training step using a prioritized replay buffer.
+    """
+    if self.replay_buffer.size() < self.replay_buffer.batch_size:
+      return
+
+    # Sample large batch
+    large_batch = self.sample_large_batch()
+    states, actions, rewards, next_states, dones = zip(*large_batch)
+
+    # Convert to tensors
+    states = torch.FloatTensor(states)
+    actions = torch.FloatTensor(actions)
+    rewards = torch.FloatTensor(rewards).unsqueeze(1)
+    next_states = torch.FloatTensor(next_states)
+    dones = torch.FloatTensor(dones).unsqueeze(1)
+
+    # Compute priorities
+    with torch.no_grad():
+      target_q_values = rewards + self.gamma * (1 - dones) * self.target_critic(next_states, self.actor(next_states))
+    current_q_values = self.critic(states, actions)
+    td_errors = torch.abs(current_q_values - target_q_values).detach().numpy()
+    priorities = td_errors.flatten()
+
+    # Down-sample to prioritized batch
+    prioritized_indices = self.replay_buffer.sample_prioritized_batch(priorities)
+    prioritized_samples = self.replay_buffer.get_samples_by_indices(prioritized_indices)
+    states, actions, rewards, next_states, dones = zip(*prioritized_samples)
+
+    states = torch.FloatTensor(states)
+    actions = torch.FloatTensor(actions)
+    rewards = torch.FloatTensor(rewards).unsqueeze(1)
+    next_states = torch.FloatTensor(next_states)
+    dones = torch.FloatTensor(dones).unsqueeze(1)
+
+    # Critic update
+    with torch.no_grad():
+      target_q_values = rewards + self.gamma * (1 - dones) * self.target_critic(next_states, self.actor(next_states))
+    current_q_values = self.critic(states, actions)
+    critic_loss = nn.MSELoss()(current_q_values, target_q_values)
+
+    self.critic_optimizer.zero_grad()
+    critic_loss.backward()
+    self.critic_optimizer.step()
+
+    # Actor update
+    actor_loss = -self.critic(states, self.actor(states)).mean()
+    self.actor_optimizer.zero_grad()
+    actor_loss.backward()
+    self.actor_optimizer.step()
+
+    # Soft update of target critic
+    for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
+      target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
