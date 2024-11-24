@@ -55,6 +55,18 @@ class Model:
         noise_clip (float): Max magnitude of noise added to target actions.
         policy_freq (int): Frequency of policy updates relative to critic updates.
     """
+    self.parameters = {
+        "buffer_size": buffer_size,
+        "batch_size": batch_size,
+        "gamma": gamma,
+        "tau": tau,
+        "actor_lr": actor_lr,
+        "critic_lr": critic_lr,
+        "policy_noise": policy_noise,
+        "noise_clip": noise_clip,
+        "policy_freq": policy_freq
+    }
+    
     self.env = env
     self.state_dim = env.observation_space.shape[0]
     self.action_dim = env.action_space.shape[0]

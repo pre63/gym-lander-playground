@@ -3,7 +3,7 @@ from sb3_contrib import TRPO
 
 
 class Model:
-  def __init__(self, env: gym.Env, gamma=0.99, gae_lambda=0.95, target_kl=0.01):
+  def __init__(self, env: gym.Env, gamma=0.99, gae_lambda=0.95, target_kl=0.01, net_arch=[64, 64]):
     """
     Initialize the TRPO model with the given environment and hyperparameters.
     Args:
@@ -12,6 +12,13 @@ class Model:
         gae_lambda (float): Lambda for Generalized Advantage Estimation (GAE).
         target_kl (float): Target Kullback-Leibler divergence for trust region update.
     """
+    self.parameters = {
+        "gamma": gamma,
+        "gae_lambda": gae_lambda,
+        "target_kl": target_kl,
+        "net_arch": net_arch
+    }
+
     self.env = env
     self.model = TRPO(
         policy="MlpPolicy",
@@ -21,7 +28,7 @@ class Model:
         gae_lambda=gae_lambda,
         target_kl=target_kl,  # Correctly using target_kl here
         policy_kwargs={
-            "net_arch": [64, 64],  # Example network architecture
+            "net_arch": net_arch
         },
         device="cpu"
     )

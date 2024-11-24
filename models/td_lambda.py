@@ -3,20 +3,26 @@ import gymnasium as gym
 
 
 class Model:
-  def __init__(self, env: gym.Env, lambda_=0.9):
+  def __init__(self, env: gym.Env, lambda_=0.9, learning_rate=0.1, discount_factor=0.99, epsilon=0.1):
     """
     Initialize the TD(λ) model.
     Args:
         env (gym.Env): The environment to train on.
         lambda_ (float): The eligibility trace decay parameter.
     """
+    self.parameters = {
+        "lambda_": lambda_,
+        "learning_rate": learning_rate,
+        "discount_factor": discount_factor,
+        "epsilon": epsilon
+    }
     self.env = env
     self.q_table = np.zeros((self.env.observation_space.n, self.env.action_space.n))
     self.eligibility_traces = np.zeros_like(self.q_table)
-    self.learning_rate = 0.1
-    self.discount_factor = 0.99
-    self.lambda_ = lambda_  # Decay parameter for eligibility traces
-    self.epsilon = 0.1  # For ε-greedy policy
+    self.learning_rate = learning_rate
+    self.discount_factor = discount_factor
+    self.lambda_ = lambda_
+    self.epsilon = epsilon
 
   def epsilon_greedy_action(self, state):
     """

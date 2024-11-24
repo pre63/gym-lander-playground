@@ -13,6 +13,11 @@ class Model:
         buffer_size (int): Maximum size of the replay buffer.
         batch_size (int): Number of samples to train on from the replay buffer.
     """
+    self.parameters = {
+        "buffer_size": buffer_size,
+        "batch_size": batch_size
+    }
+    
     self.env = env
     self.q_table = np.zeros((self.env.observation_space.n, self.env.action_space.n))
     self.learning_rate = 0.1

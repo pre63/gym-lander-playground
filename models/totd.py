@@ -3,7 +3,7 @@ from collections import deque
 
 
 class Model:
-  def __init__(self, env, alpha=0.01, gamma=0.99, lambd=0.9, buffer_size=10000):
+  def __init__(self, env, alpha=0.01, gamma=0.99, lambda_=0.9, buffer_size=10000):
     """
     True Online TD(lambda) with Replay.
 
@@ -11,16 +11,23 @@ class Model:
         env (gym.Env): The Gymnasium environment.
         alpha (float): Learning rate.
         gamma (float): Discount factor.
-        lambd (float): Trace decay parameter.
+        lambda_ (float): Trace decay parameter.
         buffer_size (int): Maximum size of the replay buffer.
     """
+    self.parameters = {
+        "alpha": alpha,
+        "gamma": gamma,
+        "lambda_": lambda_,
+        "buffer_size": buffer_size
+    }
+
     self.env = env
     self.state_dim = env.observation_space.shape[0]
     self.action_dim = env.action_space.shape[0]
 
     self.alpha = alpha
     self.gamma = gamma
-    self.lambd = lambd
+    self.lambda_ = lambda_
     self.buffer_size = buffer_size
 
     # Initialize weights and eligibility trace
@@ -55,7 +62,7 @@ class Model:
     td_error = self.compute_td_error(state, action, reward, next_state)
 
     # Update eligibility trace
-    self.e_trace = self.gamma * self.lambd * self.e_trace + sa_current
+    self.e_trace = self.gamma * self.lambda_ * self.e_trace + sa_current
 
     # Update weights
     self.theta += self.alpha * td_error * self.e_trace

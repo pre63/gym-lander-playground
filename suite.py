@@ -24,14 +24,53 @@ from models.totd import Model as TOTD
 
 def initiate_models(env):
   return [
-      ("TOTD", TOTD(env)),
-      ("TRPO", TRPO(env)),
-      ("DDPG", DDPG(env)),
-      ("LABER", LABER(env)),
-      ("MAC", MAC(env)),
-      ("PPO", PPO(env)),
-      ("SAC", SAC(env)),
-      ("TD3", TD3(env))
+      # TOTD
+      ("TOTD", TOTD(env, gamma=0.98, lambda_=0.9)),  # Balanced gamma, medium trace decay.
+      ("TOTD", TOTD(env, gamma=0.99, lambda_=0.95)),  # Emphasizes long-term rewards, slower decay for better credit assignment.
+      ("TOTD", TOTD(env, gamma=0.97, lambda_=0.8)),  # Shorter traces for rapid adjustments, more reactive in dynamic tasks.
+      ("TOTD", TOTD(env, gamma=0.96, lambda_=0.85)),  # Combines shorter traces with slightly less long-term focus.
+
+      # TRPO
+      ("TRPO", TRPO(env, gamma=0.99, gae_lambda=0.95, target_kl=0.01)),  # Conservative KL, high discount for long-term planning.
+      ("TRPO", TRPO(env, gamma=0.98, gae_lambda=0.90, target_kl=0.02)),  # Balanced KL and advantage estimation for dynamic phases.
+      ("TRPO", TRPO(env, gamma=0.97, gae_lambda=0.92, target_kl=0.015)),  # Moderate gamma and target KL for faster adaptation.
+      ("TRPO", TRPO(env, gamma=0.96, gae_lambda=0.85, target_kl=0.03)),  # Aggressive KL for larger policy updates, faster convergence.
+
+      # DDPG
+      ("DDPG", DDPG(env, buffer_size=500000, batch_size=128, gamma=0.98, tau=0.01, actor_lr=5e-4, critic_lr=5e-4)),  # Balanced parameters for general performance.
+      ("DDPG", DDPG(env, buffer_size=1000000, batch_size=256, gamma=0.99, tau=0.005, actor_lr=1e-4, critic_lr=1e-4)),  # Conservative learning for long-term stability.
+      ("DDPG", DDPG(env, buffer_size=250000, batch_size=64, gamma=0.97, tau=0.02, actor_lr=1e-3, critic_lr=1e-3)),  # Smaller buffer and aggressive learning for faster updates.
+      ("DDPG", DDPG(env, buffer_size=750000, batch_size=256, gamma=0.96, tau=0.01, actor_lr=2e-4, critic_lr=2e-4)),  # Hybrid exploration-exploitation parameters.
+
+      # LABER
+      ("LABER", LABER(env, buffer_size=200000, batch_size=256, alpha=0.2, gamma=0.97, tau=0.01)),  # Balanced prioritization and discount.
+      ("LABER", LABER(env, buffer_size=300000, batch_size=128, alpha=0.1, gamma=0.96, tau=0.005)),  # Emphasizes exploitation with conservative updates.
+      ("LABER", LABER(env, buffer_size=150000, batch_size=64, alpha=0.15, gamma=0.98, tau=0.02)),  # Prioritizes shorter-term adjustments, rapid replay.
+      ("LABER", LABER(env, buffer_size=400000, batch_size=128, alpha=0.25, gamma=0.95, tau=0.01)),  # Larger buffer and prioritization for high-dimensional states.
+
+      # MAC
+      ("MAC", MAC(env, buffer_size=300000, batch_size=64, actor_lr=1e-3, critic_lr=1e-3, tau=0.005)),  # Rapid updates for dynamic control.
+      ("MAC", MAC(env, buffer_size=500000, batch_size=128, actor_lr=5e-4, critic_lr=5e-4, tau=0.01)),  # Balanced parameters for steady performance.
+      ("MAC", MAC(env, buffer_size=250000, batch_size=32, actor_lr=1e-4, critic_lr=1e-4, tau=0.02)),  # Smaller memory for faster response times.
+      ("MAC", MAC(env, buffer_size=400000, batch_size=128, actor_lr=3e-4, critic_lr=3e-4, tau=0.01)),  # Larger replay memory for robust long-term learning.
+
+      # PPO
+      ("PPO", PPO(env, gamma=0.99, gae_lambda=0.95, clip_range=0.2, ent_coef=0.01)),  # Standard PPO parameters.
+      ("PPO", PPO(env, gamma=0.98, gae_lambda=0.92, clip_range=0.15, ent_coef=0.02)),  # Increased entropy for exploration.
+      ("PPO", PPO(env, gamma=0.97, gae_lambda=0.9, clip_range=0.25, ent_coef=0.005)),  # Exploitation-focused with larger policy updates.
+      ("PPO", PPO(env, gamma=0.96, gae_lambda=0.88, clip_range=0.18, ent_coef=0.015)),  # Balances exploration and advantage estimation.
+
+      # SAC
+      ("SAC", SAC(env, buffer_size=1000000, batch_size=256, gamma=0.99, tau=0.005, alpha=0.2, actor_lr=3e-4, critic_lr=3e-4)),  # Stable entropy regularization.
+      ("SAC", SAC(env, buffer_size=500000, batch_size=128, gamma=0.98, tau=0.01, alpha=0.15, actor_lr=1e-3, critic_lr=1e-3)),  # Balanced exploration-exploitation.
+      ("SAC", SAC(env, buffer_size=750000, batch_size=64, gamma=0.97, tau=0.02, alpha=0.1, actor_lr=5e-4, critic_lr=5e-4)),  # Rapid updates for dynamic rewards.
+      ("SAC", SAC(env, buffer_size=800000, batch_size=256, gamma=0.96, tau=0.01, alpha=0.25, actor_lr=2e-4, critic_lr=2e-4)),  # Larger buffer for smooth learning.
+
+      # TD3
+      ("TD3", TD3(env, buffer_size=500000, batch_size=128, gamma=0.99, tau=0.01, actor_lr=5e-4, critic_lr=5e-4, policy_noise=0.1, noise_clip=0.25, policy_freq=2)),  # Standard TD3 setup.
+      ("TD3", TD3(env, buffer_size=1000000, batch_size=256, gamma=0.98, tau=0.005, actor_lr=1e-4, critic_lr=1e-4, policy_noise=0.2, noise_clip=0.3, policy_freq=3)),  # Conservative exploration noise.
+      ("TD3", TD3(env, buffer_size=250000, batch_size=64, gamma=0.97, tau=0.02, actor_lr=1e-3, critic_lr=1e-3, policy_noise=0.05, noise_clip=0.1, policy_freq=1)),  # Aggressive learning with reduced noise.
+      ("TD3", TD3(env, buffer_size=750000, batch_size=128, gamma=0.96, tau=0.01, actor_lr=2e-4, critic_lr=2e-4, policy_noise=0.15, noise_clip=0.2, policy_freq=2)),  # Balanced learning and exploration.
   ]
 
 
@@ -71,6 +110,7 @@ def main():
         "episodes": num_episodes,
         "reward_strategy": reward_strategy_name,
         "environment": env_name,
+        "model_params": model.parameters
     }
 
     results_folder = create_results_folder(model_name, config)

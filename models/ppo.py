@@ -5,14 +5,27 @@ from stable_baselines3 import PPO
 
 
 class Model:
-  def __init__(self, env: gym.Env):
+  def __init__(self, env: gym.Env, gamma=0.99, gae_lambda=0.95, clip_range=0.2, ent_coef=0.01):
     """
     Initialize the PPO model.
     Args:
         env (gym.Env): The environment to train on.
     """
+    self.parameters = {
+        "gamma": gamma,
+        "gae_lambda": gae_lambda,
+        "clip_range": clip_range,
+        "ent_coef": ent_coef
+    }
     self.env = env
-    self.model = PPO("MlpPolicy", env, verbose=0, device="cpu")
+
+    self.model = PPO("MlpPolicy", env,
+                     gamma=gamma,
+                     gae_lambda=gae_lambda,
+                     clip_range=clip_range,
+                     ent_coef=ent_coef,
+
+                     verbose=0, device="cpu")
 
   def train(self):
     """

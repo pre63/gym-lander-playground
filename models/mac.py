@@ -99,6 +99,16 @@ class Critic(nn.Module):
 
 class Model:
   def __init__(self, env, buffer_size=100000, batch_size=256, gamma=0.99, tau=0.005, alpha=0.2, actor_lr=3e-4, critic_lr=3e-4):
+    self.parameters = {
+        "buffer_size": buffer_size,
+        "batch_size": batch_size,
+        "gamma": gamma,
+        "tau": tau,
+        "actor_lr": actor_lr,
+        "critic_lr": critic_lr,
+        "alpha": alpha
+    }
+
     self.env = env
     self.state_dim = env.observation_space.shape[0]
     self.action_dim = env.action_space.shape[0]

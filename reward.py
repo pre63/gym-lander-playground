@@ -13,19 +13,19 @@ def proximity_reward(state, reward, action, done, info):
   """
   Reward strategy prioritizing proximity to the target and low velocity.
   """
-  distance_to_target = np.linalg.norm(state[:2])  # Assume first two state dimensions are position
-  vertical_velocity = abs(state[2])  # Assume state[2] is vertical velocity
-  horizontal_velocity = abs(state[3])  # Assume state[3] is horizontal velocity
+  distance_to_target = np.linalg.norm(state[:2])
+  vertical_velocity = abs(state[2])
+  horizontal_velocity = abs(state[3])
 
-  reward = -distance_to_target  # Penalize distance from the target
-  reward -= 10 * vertical_velocity  # Penalize high vertical speed
-  reward -= 5 * horizontal_velocity  # Penalize high horizontal speed
+  reward = -distance_to_target**2  # Quadratic penalty for distance
+  reward -= 10 * vertical_velocity * (1 / (distance_to_target + 1))  # Scale penalty with proximity
+  reward -= 5 * horizontal_velocity * (1 / (distance_to_target + 1))
 
   if done:
-    if info.get("landed_successfully", False):  # Check for landing success
-      reward += 100  # Bonus for successful landing
+    if info.get("landed_successfully", False):
+      reward += 100 - 2 * (vertical_velocity + horizontal_velocity)  # Scaled success bonus
     else:
-      reward -= 100  # Penalty for crashing
+      reward -= 100
 
   return reward
 
@@ -36,12 +36,14 @@ def energy_efficient_reward(state, reward, action, done, info):
   """
   fuel_usage = np.linalg.norm(action)  # Action magnitude as a proxy for fuel usage
   distance_to_target = np.linalg.norm(state[:2])
-  reward = -distance_to_target
-  reward -= 0.1 * fuel_usage  # Penalize fuel usage
+
+  reward = -distance_to_target**2  # Quadratic penalty for distance
+  if fuel_usage > 1.0:  # Penalize only excessive fuel usage
+    reward -= 0.1 * (fuel_usage - 1.0)
 
   if done:
     if info.get("landed_successfully", False):
-      reward += 100
+      reward += 100 - 0.1 * fuel_usage  # Success bonus scaled by fuel efficiency
     else:
       reward -= 100
 
@@ -54,7 +56,13 @@ def combined_reward(state, reward, action, done, info):
   """
   proximity = proximity_reward(state, reward, action, done, info)
   efficiency = energy_efficient_reward(state, reward, action, done, info)
-  return 0.7 * proximity + 0.3 * efficiency
+
+  # Adjust weights dynamically based on proximity
+  distance_to_target = np.linalg.norm(state[:2])
+  proximity_weight = 0.7 if distance_to_target > 1.0 else 0.9
+  efficiency_weight = 1 - proximity_weight
+
+  return proximity_weight * proximity + efficiency_weight * efficiency
 
 
 # Registry for reward strategies

@@ -52,6 +52,16 @@ class Model:
         actor_lr (float): Learning rate for the actor network.
         critic_lr (float): Learning rate for the critic network.
     """
+
+    self.parameters = {
+        "buffer_size": buffer_size,
+        "batch_size": batch_size,
+        "gamma": gamma,
+        "tau": tau,
+        "actor_lr": actor_lr,
+        "critic_lr": critic_lr
+    }
+
     self.env = env
     self.state_dim = env.observation_space.shape[0]
     self.action_dim = env.action_space.shape[0]
