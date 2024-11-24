@@ -69,14 +69,15 @@ class Model:
     self.action_dim = env.action_space.shape[0]
     self.max_action = env.action_space.high[0]
 
-    # Networks
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Device setup
+    self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
+    # Networks
+    self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(self.device)
     self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
 
-    self.critic = Critic(self.state_dim, self.action_dim).to(device)
-    self.target_critic = Critic(self.state_dim, self.action_dim).to(device)
+    self.critic = Critic(self.state_dim, self.action_dim).to(self.device)
+    self.target_critic = Critic(self.state_dim, self.action_dim).to(self.device)
     self.target_critic.load_state_dict(self.critic.state_dict())
     self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_lr)
 
@@ -103,29 +104,31 @@ class Model:
         trajectory (list): The trajectory of the agent..
     """
     state, _ = self.env.reset()
+    state = torch.FloatTensor(state).to(self.device)
     done = False
     episode_reward = 0
     trajectory = []
 
     while not done:
       # Select an action
-      state_tensor = torch.FloatTensor(state).unsqueeze(0)
-      action = self.actor(state_tensor).detach().numpy()[0]
+      state_tensor = state.unsqueeze(0)
+      action = self.actor(state_tensor).detach().cpu().numpy()[0]
       next_state, reward, terminated, truncated, _ = self.env.step(action)
+      next_state = torch.FloatTensor(next_state).to(self.device)
       done = terminated or truncated
 
       # Store transition in the replay buffer
-      self.store_transition(state, action, reward, next_state, done)
+      self.store_transition(state.cpu().numpy(), action, reward, next_state.cpu().numpy(), done)
 
       # Perform training step
       self.train_step()
 
       # Update state and rewards
       trajectory.append({
-          "state": state.tolist(),
+          "state": state.cpu().numpy().tolist(),
           "action": action.tolist(),
           "reward": reward,
-          "next_state": next_state.tolist(),
+          "next_state": next_state.cpu().numpy().tolist(),
           "done": done
       })
       state = next_state
@@ -144,18 +147,18 @@ class Model:
     large_batch = self.sample_large_batch()
     states, actions, rewards, next_states, dones = zip(*large_batch)
 
-    # Convert to tensors
-    states = torch.FloatTensor(states)
-    actions = torch.FloatTensor(actions)
-    rewards = torch.FloatTensor(rewards).unsqueeze(1)
-    next_states = torch.FloatTensor(next_states)
-    dones = torch.FloatTensor(dones).unsqueeze(1)
+    # Convert to tensors and move to device
+    states = torch.FloatTensor(np.array(states)).to(self.device)
+    actions = torch.FloatTensor(np.array(actions)).to(self.device)
+    rewards = torch.FloatTensor(np.array(rewards)).unsqueeze(1).to(self.device)
+    next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
+    dones = torch.FloatTensor(np.array(dones)).unsqueeze(1).to(self.device)
 
     # Compute priorities
     with torch.no_grad():
       target_q_values = rewards + self.gamma * (1 - dones) * self.target_critic(next_states, self.actor(next_states))
     current_q_values = self.critic(states, actions)
-    td_errors = torch.abs(current_q_values - target_q_values).detach().numpy()
+    td_errors = torch.abs(current_q_values - target_q_values).detach().cpu().numpy()
     priorities = td_errors.flatten()
 
     # Down-sample to prioritized batch
@@ -163,11 +166,12 @@ class Model:
     prioritized_samples = self.replay_buffer.get_samples_by_indices(prioritized_indices)
     states, actions, rewards, next_states, dones = zip(*prioritized_samples)
 
-    states = torch.FloatTensor(states)
-    actions = torch.FloatTensor(actions)
-    rewards = torch.FloatTensor(rewards).unsqueeze(1)
-    next_states = torch.FloatTensor(next_states)
-    dones = torch.FloatTensor(dones).unsqueeze(1)
+    # Convert to tensors and move to device again
+    states = torch.FloatTensor(np.array(states)).to(self.device)
+    actions = torch.FloatTensor(np.array(actions)).to(self.device)
+    rewards = torch.FloatTensor(np.array(rewards)).unsqueeze(1).to(self.device)
+    next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
+    dones = torch.FloatTensor(np.array(dones)).unsqueeze(1).to(self.device)
 
     # Critic update
     with torch.no_grad():

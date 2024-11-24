@@ -23,6 +23,7 @@ class Model:
         policy_kwargs={
             "net_arch": [64, 64],  # Example network architecture
         },
+        device="cpu"
     )
 
   def train(self):

@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 import gymnasium as gym
 from stable_baselines3 import PPO
 
@@ -11,7 +12,7 @@ class Model:
         env (gym.Env): The environment to train on.
     """
     self.env = env
-    self.model = PPO("MlpPolicy", env, verbose=0)
+    self.model = PPO("MlpPolicy", env, verbose=0, device="cpu")
 
   def train(self):
     """

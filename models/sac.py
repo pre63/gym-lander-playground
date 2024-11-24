@@ -72,15 +72,18 @@ class Model:
     self.action_dim = env.action_space.shape[0]
     self.max_action = env.action_space.high[0]
 
+    # Device setup
+    self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # Actor
-    self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
+    self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(self.device)
     self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
 
     # Critics
-    self.critic_1 = Critic(self.state_dim, self.action_dim).to(device)
-    self.critic_2 = Critic(self.state_dim, self.action_dim).to(device)
-    self.critic_target_1 = Critic(self.state_dim, self.action_dim).to(device)
-    self.critic_target_2 = Critic(self.state_dim, self.action_dim).to(device)
+    self.critic_1 = Critic(self.state_dim, self.action_dim).to(self.device)
+    self.critic_2 = Critic(self.state_dim, self.action_dim).to(self.device)
+    self.critic_target_1 = Critic(self.state_dim, self.action_dim).to(self.device)
+    self.critic_target_2 = Critic(self.state_dim, self.action_dim).to(self.device)
     self.critic_target_1.load_state_dict(self.critic_1.state_dict())
     self.critic_target_2.load_state_dict(self.critic_2.state_dict())
     self.critic_optimizer_1 = optim.Adam(self.critic_1.parameters(), lr=critic_lr)
@@ -102,12 +105,14 @@ class Model:
   def sample_replay_buffer(self):
     batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size))
     states, actions, rewards, next_states, dones = zip(*batch)
+
+    # Convert to tensors and move to device
     return (
-        torch.FloatTensor(states),
-        torch.FloatTensor(actions),
-        torch.FloatTensor(rewards).unsqueeze(1),
-        torch.FloatTensor(next_states),
-        torch.FloatTensor(dones).unsqueeze(1),
+        torch.FloatTensor(states).to(self.device),
+        torch.FloatTensor(actions).to(self.device),
+        torch.FloatTensor(rewards).unsqueeze(1).to(self.device),
+        torch.FloatTensor(next_states).to(self.device),
+        torch.FloatTensor(dones).unsqueeze(1).to(self.device),
     )
 
   def update(self):
@@ -159,26 +164,28 @@ class Model:
         trajectory (list): The trajectory of the agent..
     """
     state, _ = self.env.reset()
+    state = torch.FloatTensor(state).to(self.device)
     done = False
     episode_reward = 0
     trajectory = []
 
     while not done:
-      state_tensor = torch.FloatTensor(state).unsqueeze(0)
+      state_tensor = state.unsqueeze(0)
       action, _ = self.actor.sample(state_tensor)
-      action = action.detach().numpy()[0]
+      action = action.detach().cpu().numpy()[0]
 
       next_state, reward, terminated, truncated, _ = self.env.step(action)
+      next_state = torch.FloatTensor(next_state).to(self.device)
       done = terminated or truncated
 
-      self.store_transition(state, action, reward, next_state, done)
+      self.store_transition(state.cpu().numpy(), action, reward, next_state.cpu().numpy(), done)
       self.update()
 
       trajectory.append({
-          "state": state.tolist(),
+          "state": state.cpu().numpy().tolist(),
           "action": action.tolist(),
           "reward": reward,
-          "next_state": next_state.tolist(),
+          "next_state": next_state.cpu().numpy().tolist(),
           "done": done
       })
       episode_reward += reward

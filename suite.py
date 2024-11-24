@@ -1,7 +1,8 @@
 import sys
 import gymnasium as gym
 
-from playground import create_results_folder, run_model
+from playground import create_results_folder, run_model, wrap_environment
+from reward import REWARD_STRATEGIES
 
 # ddpg.py (Deep Deterministic Policy Gradient)
 # laber.py (Likely supports continuous actions due to enhancements over DDPG/SAC)
@@ -53,6 +54,10 @@ def main():
   except gym.error.Error as e:
     print(f"Error: Unable to create environment '{env_name}'.\n{e}")
     sys.exit(1)
+
+  # Wrap environment with selected reward strategy
+  reward_strategy = REWARD_STRATEGIES.get("default")
+  env = wrap_environment(env, reward_strategy)
 
   models = initiate_models(env)
 

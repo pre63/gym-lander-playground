@@ -68,19 +68,20 @@ class Model:
     self.action_dim = env.action_space.shape[0]
     self.max_action = env.action_space.high[0]
 
-    # Networks
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Device setup
+    self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
+    # Networks
+    self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(self.device)
     self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
 
-    self.critic = Critic(self.state_dim, self.action_dim).to(device)
-    self.target_critic = Critic(self.state_dim, self.action_dim).to(device)
+    self.critic = Critic(self.state_dim, self.action_dim).to(self.device)
+    self.target_critic = Critic(self.state_dim, self.action_dim).to(self.device)
     self.target_critic.load_state_dict(self.critic.state_dict())
     self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_lr)
 
     # Mean Actor
-    self.mean_actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
+    self.mean_actor = Actor(self.state_dim, self.action_dim, self.max_action).to(self.device)
     self.mean_actor.load_state_dict(self.actor.state_dict())
 
     # Replay Buffer
@@ -102,7 +103,15 @@ class Model:
     if self.replay_buffer.size() < self.replay_buffer.batch_size:
       return
 
+    # Sample from replay buffer
     states, actions, rewards, next_states, dones = self.replay_buffer.sample()
+
+    # Move data to device
+    states = states.to(self.device)
+    actions = actions.to(self.device)
+    rewards = rewards.to(self.device)
+    next_states = next_states.to(self.device)
+    dones = dones.to(self.device)
 
     # Critic update
     with torch.no_grad():
@@ -139,27 +148,29 @@ class Model:
 
     Returns:
         episode_reward (float): Total reward obtained in the episode.
-        trajectory (list): The trajectory of the agent..
+        trajectory (list): The trajectory of the agent.
     """
     state, _ = self.env.reset()
+    state = torch.FloatTensor(state).to(self.device)
     done = False
     episode_reward = 0
     trajectory = []
 
     while not done:
-      state_tensor = torch.FloatTensor(state).unsqueeze(0)
-      action = self.actor(state_tensor).detach().numpy()[0]
+      state_tensor = state.unsqueeze(0)
+      action = self.actor(state_tensor).detach().cpu().numpy()[0]
       next_state, reward, terminated, truncated, _ = self.env.step(action)
+      next_state = torch.FloatTensor(next_state).to(self.device)
       done = terminated or truncated
 
-      self.store_transition(state, action, reward, next_state, done)
+      self.store_transition(state.cpu().numpy(), action, reward, next_state.cpu().numpy(), done)
       self.train_step()
 
       trajectory.append({
-          "state": state.tolist(),
+          "state": state.cpu().numpy().tolist(),
           "action": action.tolist(),
           "reward": reward,
-          "next_state": next_state.tolist(),
+          "next_state": next_state.cpu().numpy().tolist(),
           "done": done
       })
       episode_reward += reward

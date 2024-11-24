@@ -16,6 +16,7 @@ import importlib
 import json
 from datetime import datetime
 import gymnasium as gym
+from reward import REWARD_STRATEGIES
 
 
 def create_results_folder(model_name, config):
@@ -50,9 +51,26 @@ def load_model(model_name):
     sys.exit(1)
 
 
+def wrap_environment(env, reward_strategy):
+  """
+  Wrap the environment with the selected reward strategy.
+  """
+  class RewardWrapper(gym.Wrapper):
+    def __init__(self, env, reward_fn):
+      super().__init__(env)
+      self.reward_fn = reward_fn
+
+    def step(self, action):
+      state, reward, terminated, truncated, info = self.env.step(action)
+      custom_reward = self.reward_fn(state,reward, action, terminated or truncated, info)
+      return state, custom_reward, terminated, truncated, info
+
+  return RewardWrapper(env, reward_strategy)
+
+
 def main():
-  if len(sys.argv) < 3:
-    print("Usage: python playground.py [model] [episodes] [optional_env]")
+  if len(sys.argv) < 4:
+    print("Usage: python playground.py [model] [episodes] [reward_strategy] [optional_env]")
     sys.exit(1)
 
   model_name = sys.argv[1]
@@ -62,10 +80,21 @@ def main():
     print("Error: Number of episodes must be an integer.")
     sys.exit(1)
 
-  # Use LunarLanderContinuous-v3 as the default environment, allow override
-  env_name = sys.argv[3] if len(sys.argv) > 3 else "LunarLanderContinuous-v3"
+  reward_strategy_name = sys.argv[3] if len(sys.argv) > 3 else "default"
+  reward_strategy = REWARD_STRATEGIES.get(reward_strategy_name)
+  if reward_strategy is None:
+    print(f"Error: Reward strategy '{reward_strategy_name}' not found.")
+    sys.exit(1)
 
-  config = {"model": model_name, "episodes": num_episodes, "environment": env_name}
+  # Use LunarLanderContinuous-v3 as the default environment, allow override
+  env_name = sys.argv[4] if len(sys.argv) > 4 else "LunarLanderContinuous-v3"
+
+  config = {
+      "model": model_name,
+      "episodes": num_episodes,
+      "reward_strategy": reward_strategy_name,
+      "environment": env_name,
+  }
 
   results_folder = create_results_folder(model_name, config)
   ModelClass = load_model(model_name)
@@ -75,6 +104,9 @@ def main():
   except gym.error.Error as e:
     print(f"Error: Unable to create environment '{env_name}'.\n{e}")
     sys.exit(1)
+
+  # Wrap environment with selected reward strategy
+  env = wrap_environment(env, reward_strategy)
 
   model = ModelClass(env)
 
@@ -97,7 +129,7 @@ def run_model(model, num_episodes, results_folder, env):
       best_episode.update({
           "episode": episode,
           "reward": episode_reward,
-          "trajectory": trajectory
+          "trajectory": trajectory,
       })
 
     print(f"Episode {episode + 1}/{num_episodes}, Reward: {episode_reward}")
@@ -108,8 +140,8 @@ def run_model(model, num_episodes, results_folder, env):
   results = {
       "all_rewards": all_rewards,
       "average_reward": sum(all_rewards) / len(all_rewards),
-      "variance_in_rewards": sum((x - sum(all_rewards) / len(all_rewards))**2 for x in all_rewards) / len(all_rewards),
-      "average_time": (end_time - start_time).total_seconds() / num_episodes
+      "variance_in_rewards": sum((x - sum(all_rewards) / len(all_rewards)) ** 2 for x in all_rewards) / len(all_rewards),
+      "average_time": (end_time - start_time).total_seconds() / num_episodes,
   }
 
   save_results_to_disk(results, results_folder)
