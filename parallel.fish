@@ -7,8 +7,8 @@ set episodes 10 20 50 100 200 500 1000 2000
 for strategy in $strategies
   for episodes in $episodes
     python suite.py $episodes $strategy &
-    wait
   end
+  wait
 end
 
 echo "All experiments completed."
