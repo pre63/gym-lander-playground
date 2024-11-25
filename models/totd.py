@@ -5,7 +5,7 @@ from scipy import stats
 from success import check_success
 
 
-class TrueOnlineTDlambda_aReplay:
+class TrueOnlineTDLambdaReplay:
   def __init__(self, alpha, gamma, lambda_, theta_init):
     """
     Initialize the True Online TD(λ)-Replay algorithm parameters.
@@ -77,7 +77,7 @@ class Model:
     self.env = env
     state_dim = env.observation_space.shape[0]
     theta_init = np.zeros(state_dim)
-    self.algorithm = TrueOnlineTDlambda_aReplay(
+    self.algorithm = TrueOnlineTDLambdaReplay(
         alpha=alpha,
         gamma=gamma,
         lambda_=lambda_,
@@ -86,7 +86,7 @@ class Model:
     self.parameters = {
         "alpha": alpha,
         "gamma": gamma,
-        "lambda_a": lambda_
+        "lambda": lambda_
     }
     self.best_cumulative_rewards = []
 

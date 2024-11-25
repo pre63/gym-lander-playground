@@ -11,7 +11,7 @@ class Model:
     Args:
         env (gym.Env): The environment to train on.
         gamma (float): Discount factor for rewards.
-        gae_lambda (float): lambda_a for Generalized Advantage Estimation (GAE).
+        gae_lambda (float): lambda for Generalized Advantage Estimation (GAE).
         target_kl (float): Target Kullback-Leibler divergence for trust region update.
     """
     self.parameters = {

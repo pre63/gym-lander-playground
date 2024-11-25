@@ -5,8 +5,8 @@ def check_success(observation,
                   terminated,
                   angle_threshold=0.1,
                   landing_pad_threshold=0.2,
-                  x_velocity_threshold=0.3,
-                  y_velocity_threshold=0.3):
+                  x_velocity_threshold=0.01,
+                  y_velocity_threshold=0.01):
   """
   Determine if the agent has successfully landed in the Continuous Lunar Lander environment.
 
