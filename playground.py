@@ -132,7 +132,7 @@ def main():
   run_model(model, num_episodes, results_folder, env)
 
 
-def run_model(model, num_episodes, results_folder, env, evaluation_episodes=100):
+def run_model(model, num_episodes, results_folder, env, evaluation_episodes=1000):
   all_rewards = []
   best_episode = {"episode": None, "reward": float("-inf"), "history": []}
 

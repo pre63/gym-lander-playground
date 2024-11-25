@@ -88,7 +88,6 @@ class Model:
         "gamma": gamma,
         "lambda": lambda_
     }
-    self.best_cumulative_rewards = []
 
   def train(self):
     """
@@ -108,23 +107,18 @@ class Model:
     self.algorithm.reset_traces()
 
     while not done:
-      action = self.env.action_space.sample()  # Random action; replace with a policy if available
+      action = self.select_action(state)
       next_state, reward, terminated, truncated, info = self.env.step(action)
       done = terminated or truncated
 
-      # Convert states to feature vectors (phi_t and phi_t1)
       phi_t = np.array(state)
       phi_t1 = np.array(next_state)
       self.algorithm.train_step(phi_t, reward, phi_t1)
 
       episode_reward += reward
-      cumulative_rewards.append(episode_reward)
-      t += 1
-
-      # Append history
       history.append({
           "state": state.tolist(),
-          "action": action.tolist() if isinstance(action, np.ndarray) else action,
+          "action": action.tolist(),
           "reward": reward,
           "episode_reward": episode_reward,
           "next_state": next_state.tolist(),
@@ -134,6 +128,35 @@ class Model:
       state = next_state
 
     return episode_reward, history
+
+  def select_action(self, state):
+    """
+    Select an action for a continuous action space using a Gaussian policy.
+
+    Args:
+        state (np.ndarray): The current state of the environment.
+    Returns:
+        np.ndarray: The continuous action sampled from the policy.
+    """
+    mean_action = self.compute_policy(state)  # Mean action
+    action = np.clip(
+        mean_action + np.random.normal(0, 0.1, size=mean_action.shape),
+        self.env.action_space.low,
+        self.env.action_space.high
+    )
+    return action
+
+  def compute_policy(self, state):
+    """
+    Compute the mean action for the current policy.
+
+    Args:
+        state (np.ndarray): The current state of the environment.
+    Returns:
+        np.ndarray: The mean action based on the policy.
+    """
+    phi_state = np.array(state)
+    return np.dot(self.algorithm.theta, phi_state)
 
   def save(self, filename):
     """
@@ -152,34 +175,22 @@ class Model:
     self.algorithm.theta = np.load(filename + ".npy")
 
   def evaluate(self, render=False):
-    """
-    Evaluate the model without training and return success and rewards.
-    Args:
-        render (bool): Whether to render the environment during evaluation.
-    Returns:
-        success (bool): Whether the evaluation was successful based on the defined criteria.
-        episode_reward (float): Total reward obtained in the episode.
-        frames (list): List of frames if rendering is enabled.
-    """
     state, _ = self.env.reset()
     done = False
     episode_reward = 0
     frames = []
 
     while not done:
-      action = self.env.action_space.sample()  # Random action; replace with a policy if available
+      action = self.select_action(state)
       next_state, reward, terminated, truncated, info = self.env.step(action)
       done = terminated or truncated
 
       episode_reward += reward
 
       if render:
-        frame = self.env.render()
-        frames.append(frame)
+        frames.append(self.env.render())
 
       state = next_state
 
-    # Define success condition
     success = check_success(next_state, terminated)
-
     return success, episode_reward, frames

@@ -101,7 +101,7 @@ class Model:
     frames = []
 
     while not done:
-      action = self.env.action_space.sample()
+      action, _ = self.model.predict(state, deterministic=False)
       next_state, reward, terminated, truncated, info = self.env.step(action)
       done = terminated or truncated
 
