@@ -37,10 +37,10 @@ def initiate_models(env):
       ("TRPO", TRPO(env, gamma=0.96, gae_lambda=0.85, target_kl=0.03)),  # Aggressive KL for larger policy updates, faster convergence.
 
       # DDPG
-      ("DDPG", DDPG(env, buffer_size=500000, batch_size=128, gamma=0.98, tau=0.01, actor_lr=5e-4, critic_lr=5e-4)),  # Balanced parameters for general performance.
-      ("DDPG", DDPG(env, buffer_size=1000000, batch_size=256, gamma=0.99, tau=0.005, actor_lr=1e-4, critic_lr=1e-4)),  # Conservative learning for long-term stability.
-      ("DDPG", DDPG(env, buffer_size=250000, batch_size=64, gamma=0.97, tau=0.02, actor_lr=1e-3, critic_lr=1e-3)),  # Smaller buffer and aggressive learning for faster updates.
-      ("DDPG", DDPG(env, buffer_size=750000, batch_size=256, gamma=0.96, tau=0.01, actor_lr=2e-4, critic_lr=2e-4)),  # Hybrid exploration-exploitation parameters.
+      ("DDPG", DDPG(env, buffer_size=500000, batch_size=128, gamma=0.98, tau=0.01, learning_rate=5e-4)),  # Balanced parameters for general performance.
+      ("DDPG", DDPG(env, buffer_size=1000000, batch_size=256, gamma=0.99, tau=0.005, learning_rate=1e-4)),  # Conservative learning for long-term stability.
+      ("DDPG", DDPG(env, buffer_size=250000, batch_size=64, gamma=0.97, tau=0.02, learning_rate=1e-3)),  # Smaller buffer and aggressive learning for faster updates.
+      ("DDPG", DDPG(env, buffer_size=750000, batch_size=256, gamma=0.96, tau=0.01, learning_rate=2e-4)),  # Hybrid exploration-exploitation parameters.
 
       # LABER
       ("LABER", LABER(env, buffer_size=200000, batch_size=256, alpha=0.2, gamma=0.97, tau=0.01)),  # Balanced prioritization and discount.

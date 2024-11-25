@@ -6,6 +6,8 @@ import gymnasium as gym
 from collections import deque
 import random
 
+from success import check_success
+
 
 class Actor(nn.Module):
   def __init__(self, state_dim, action_dim, max_action):
@@ -255,7 +257,7 @@ class Model:
       state = next_state
 
     # Define success condition
-    success = not terminated and not truncated and episode_reward >= 0
+    success = check_success(next_state, terminated)
 
     # Always return frames, even if empty
     return success, episode_reward, frames

@@ -6,9 +6,11 @@ from collections import deque
 import random
 import gymnasium as gym
 
+from success import check_success
+
 
 class ReplayBuffer:
-  def __init__(self, buffer_size=100000, batch_size=256, large_batch_multiplier=4):
+  def __init__(self, buffer_size=100000, batch_size=256, large_batch_multiplier=4, device="cpu"):
     """
     Initialize a replay buffer with a fixed size.
     Args:
@@ -292,7 +294,7 @@ class Model:
       state = next_state
 
     # Define success condition
-    success = not terminated and not truncated and episode_reward >= 0
+    success = check_success(next_state, terminated)
 
     # Always return frames, even if empty
     return success, episode_reward, frames

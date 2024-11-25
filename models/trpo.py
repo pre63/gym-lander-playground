@@ -1,6 +1,8 @@
 import gymnasium as gym
 from sb3_contrib import TRPO
 
+from success import check_success
+
 
 class Model:
   def __init__(self, env: gym.Env, gamma=0.99, gae_lambda=0.95, target_kl=0.01, net_arch=[64, 64]):
@@ -9,7 +11,7 @@ class Model:
     Args:
         env (gym.Env): The environment to train on.
         gamma (float): Discount factor for rewards.
-        gae_lambda (float): Lambda for Generalized Advantage Estimation (GAE).
+        gae_lambda (float): lambda_a for Generalized Advantage Estimation (GAE).
         target_kl (float): Target Kullback-Leibler divergence for trust region update.
     """
     self.parameters = {
@@ -111,6 +113,6 @@ class Model:
 
       state = next_state
 
-    success = not terminated and not truncated and episode_reward >= 0
+    success = check_success(next_state, terminated)
 
     return success, episode_reward, frames if render else None

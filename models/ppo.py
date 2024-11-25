@@ -3,6 +3,8 @@ import torch
 import gymnasium as gym
 from stable_baselines3 import PPO
 
+from success import check_success
+
 
 class Model:
   def __init__(self, env: gym.Env, gamma=0.99, gae_lambda=0.95, clip_range=0.2, ent_coef=0.01):
@@ -107,7 +109,7 @@ class Model:
       state = next_state
 
     # Define success condition
-    success = not terminated and not truncated and episode_reward >= 0
+    success = check_success(next_state, terminated)
 
     # Always return frames, even if empty
     return success, episode_reward, frames

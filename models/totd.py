@@ -2,8 +2,10 @@ import numpy as np
 import gymnasium as gym
 from scipy import stats
 
+from success import check_success
 
-class TrueOnlineTDLambdaReplay:
+
+class TrueOnlineTDlambda_aReplay:
   def __init__(self, alpha, gamma, lambda_, theta_init):
     """
     Initialize the True Online TD(λ)-Replay algorithm parameters.
@@ -63,28 +65,28 @@ class TrueOnlineTDLambdaReplay:
 
 
 class Model:
-  def __init__(self, env: gym.Env, alpha=0.1, gamma=0.95, lambd=0.9):
+  def __init__(self, env: gym.Env, alpha=0.1, gamma=0.95, lambda_=0.9):
     """
     Initialize the model as a wrapper for the environment and algorithm.
     Args:
         env (gym.Env): The environment to train on.
         alpha (float): Learning rate.
         gamma (float): Discount factor.
-        lambd (float): Trace decay parameter.
+        lambda_ (float): Trace decay parameter.
     """
     self.env = env
     state_dim = env.observation_space.shape[0]
     theta_init = np.zeros(state_dim)
-    self.algorithm = TrueOnlineTDLambdaReplay(
+    self.algorithm = TrueOnlineTDlambda_aReplay(
         alpha=alpha,
         gamma=gamma,
-        lambda_=lambd,
+        lambda_=lambda_,
         theta_init=theta_init
     )
     self.parameters = {
         "alpha": alpha,
         "gamma": gamma,
-        "lambda": lambd
+        "lambda_a": lambda_
     }
     self.best_cumulative_rewards = []
 
@@ -178,6 +180,6 @@ class Model:
       state = next_state
 
     # Define success condition
-    success = not terminated and not truncated and episode_reward >= 0
+    success = check_success(next_state, terminated)
 
     return success, episode_reward, frames
