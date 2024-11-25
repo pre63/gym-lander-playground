@@ -39,32 +39,78 @@ class Model:
 
     Returns:
         episode_reward (float): Total reward obtained in the episode.
-        trajectory (list): The trajectory of the agent..
+        history (list): The history of the agent..
     """
     state, _ = self.env.reset()
     done = False
     episode_reward = 0
-    trajectory = []
-    frames = []
+    history = []
 
     while not done:
       action, _ = self.model.predict(state, deterministic=False)
       next_state, reward, terminated, truncated, _ = self.env.step(action)
       done = terminated or truncated
 
-      trajectory.append({
+      episode_reward += reward
+      history.append({
           "state": state.tolist(),
           "action": action.tolist(),
           "reward": reward,
+          "episode_reward": episode_reward,
           "next_state": next_state.tolist(),
           "done": done
       })
-      episode_reward += reward
       state = next_state
-
-      frames.append(self.env.render())
 
     # Perform a learning step with a fixed number of timesteps
     self.model.learn(total_timesteps=1000, reset_num_timesteps=False)
 
-    return episode_reward, trajectory, frames
+    return episode_reward, history
+
+  def save(self, filename):
+    """
+    Save the model to a file.
+    Args:
+        filename (str): The name of the file to save.
+    """
+    self.model.save(filename)
+
+  def load(self, filename):
+    """
+    Load the model from a file.
+    Args:
+        filename (str): The name of the file to load.
+    """
+    self.model.load(filename)
+
+  def evaluate(self, render=False):
+    """
+    Evaluate the model for one episode and return success status and reward.
+    Args:
+        render (bool): Whether to render frames during evaluation.
+    Returns:
+        success (bool): Whether the episode was successful.
+        episode_reward (float): Total reward obtained in the episode.
+        frames (list): List of frames if rendering is enabled.
+    """
+    state, _ = self.env.reset()
+    done = False
+    episode_reward = 0
+    frames = []
+
+    while not done:
+      action = self.env.action_space.sample()
+      next_state, reward, terminated, truncated, info = self.env.step(action)
+      done = terminated or truncated
+
+      episode_reward += reward
+
+      if render:
+        frame = self.env.render()
+        frames.append(frame)
+
+      state = next_state
+
+    success = not terminated and not truncated and episode_reward >= 0
+
+    return success, episode_reward, frames if render else None

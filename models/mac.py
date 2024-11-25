@@ -4,10 +4,11 @@ import torch.nn as nn
 import torch.optim as optim
 from collections import deque
 import random
+import gymnasium as gym
 
 
 class ReplayBuffer:
-  def __init__(self, buffer_size=100000, batch_size=256, device="cpu"):
+  def __init__(self, buffer_size=100000, batch_size=256, large_batch_multiplier=4):
     """
     Initialize a replay buffer with a fixed size.
     Args:
@@ -17,6 +18,7 @@ class ReplayBuffer:
     """
     self.buffer = deque(maxlen=buffer_size)
     self.batch_size = batch_size
+    self.large_batch_size = batch_size * large_batch_multiplier
     self.device = device
 
   def store(self, state, action, reward, next_state, done):
@@ -98,7 +100,8 @@ class Critic(nn.Module):
 
 
 class Model:
-  def __init__(self, env, buffer_size=100000, batch_size=256, gamma=0.99, tau=0.005, alpha=0.2, actor_lr=3e-4, critic_lr=3e-4):
+  def __init__(self, env, buffer_size=100000, batch_size=256, gamma=0.99, tau=0.005, actor_lr=3e-4, critic_lr=3e-4, alpha=0.2):
+
     self.parameters = {
         "buffer_size": buffer_size,
         "batch_size": batch_size,
@@ -194,14 +197,13 @@ class Model:
 
     Returns:
         episode_reward (float): Total reward obtained in the episode.
-        trajectory (list): The trajectory of the agent.
+        history (list): The history of the agent.
     """
     state, _ = self.env.reset()
     state = torch.FloatTensor(state).to(self.device)
     done = False
     episode_reward = 0
-    trajectory = []
-    frames = []
+    history = []
 
     while not done:
       state_tensor = state.unsqueeze(0)
@@ -213,16 +215,84 @@ class Model:
       self.store_transition(state.cpu().numpy(), action, reward, next_state.cpu().numpy(), done)
       self.train_step()
 
-      trajectory.append({
+      history.append({
           "state": state.cpu().numpy().tolist(),
           "action": action.tolist(),
           "reward": reward,
+          "episode_reward": episode_reward,
           "next_state": next_state.cpu().numpy().tolist(),
           "done": done
       })
       episode_reward += reward
       state = next_state
 
-      frames.append(self.env.render())
+    return episode_reward, history
 
-    return episode_reward, trajectory, frames
+  def save(self, filename):
+    """
+    Save the model to a file.
+    Args:
+        filename (str): The name of the file to save.
+    """
+    torch.save({
+        "actor": self.actor.state_dict(),
+        "critic": self.critic.state_dict(),
+        "actor_optimizer": self.actor_optimizer.state_dict(),
+        "critic_optimizer": self.critic_optimizer.state_dict(),
+        "parameters": self.parameters
+    }, filename)
+
+  def load(self, filename):
+    """
+    Load the model from a file.
+    Args:
+        filename (str): The name of the file to load.
+    """
+    checkpoint = torch.load(filename)
+    self.actor.load_state_dict(checkpoint["actor"])
+    self.critic.load_state_dict(checkpoint["critic"])
+    self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer"])
+    self.critic_optimizer.load_state_dict(checkpoint["critic_optimizer"])
+    self.parameters = checkpoint["parameters"]
+
+  def evaluate(self, render=False):
+    """
+    Run the algorithm without training and return success, rewards, and frames.
+
+    Args:
+        render (bool): Whether to render the environment during evaluation.
+
+    Returns:
+        success (bool): Whether the evaluation was successful based on the defined criteria.
+        episode_reward (float): Total reward obtained in the episode.
+        frames (list): List of frames (always returned, even if empty).
+    """
+    state, _ = self.env.reset()
+    state = torch.FloatTensor(state).to(self.device)
+    done = False
+    episode_reward = 0
+    frames = []
+
+    while not done:
+      # Select action using the current policy
+      state_tensor = state.unsqueeze(0)
+      action = self.actor(state_tensor).detach().cpu().numpy()[0]
+      action = np.clip(action, -self.max_action, self.max_action)
+
+      next_state, reward, terminated, truncated, info = self.env.step(action)
+      next_state = torch.FloatTensor(next_state).to(self.device)
+      done = terminated or truncated
+
+      episode_reward += reward
+
+      if render:
+        frame = self.env.render()
+        frames.append(frame)
+
+      state = next_state
+
+    # Define success condition
+    success = not terminated and not truncated and episode_reward >= 0
+
+    # Always return frames, even if empty
+    return success, episode_reward, frames

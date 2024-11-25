@@ -75,8 +75,8 @@ class Model:
         "actor_lr": actor_lr,
         "critic_lr": critic_lr,
         "alpha": alpha
-    } 
-    
+    }
+
     self.env = env
     self.state_dim = env.observation_space.shape[0]
     self.action_dim = env.action_space.shape[0]
@@ -178,14 +178,13 @@ class Model:
     Train the model for one episode and return the episode reward.
     Returns:
         episode_reward (float): Total reward obtained in the episode.
-        trajectory (list): The trajectory of the agent..
+        history (list): The history of the agent..
     """
     state, _ = self.env.reset()
     state = torch.FloatTensor(state).to(self.device)
     done = False
     episode_reward = 0
-    trajectory = []
-    frames = []
+    history = []
 
     while not done:
       state_tensor = state.unsqueeze(0)
@@ -199,16 +198,64 @@ class Model:
       self.store_transition(state.cpu().numpy(), action, reward, next_state.cpu().numpy(), done)
       self.update()
 
-      trajectory.append({
+      history.append({
           "state": state.cpu().numpy().tolist(),
           "action": action.tolist(),
           "reward": reward,
+          "episode_reward": episode_reward,
           "next_state": next_state.cpu().numpy().tolist(),
           "done": done
       })
       episode_reward += reward
       state = next_state
 
-      frames.append(self.env.render())
+    return episode_reward, history
 
-    return episode_reward, trajectory, frames
+  def save(self, filename):
+    torch.save(self.actor.state_dict(), filename + "_actor")
+    torch.save(self.critic_1.state_dict(), filename + "_critic_1")
+    torch.save(self.critic_2.state_dict(), filename + "_critic_2")
+
+  def load(self, filename):
+    self.actor.load_state_dict(torch.load(filename + "_actor"))
+    self.critic_1.load_state_dict(torch.load(filename + "_critic_1"))
+    self.critic_2.load_state_dict(torch.load(filename + "_critic_2"))
+
+  def evaluate(self, render=False):
+    """
+    Evaluate the model without training and return success, rewards, and frames.
+    Args:
+        render (bool): Whether to render the environment during evaluation.
+    Returns:
+        success (bool): Whether the evaluation was successful based on the defined criteria.
+        episode_reward (float): Total reward obtained in the episode.
+        frames (list): List of frames (always returned, even if empty).
+    """
+    state, _ = self.env.reset()
+    state = torch.FloatTensor(state).to(self.device)
+    done = False
+    episode_reward = 0
+    frames = []
+
+    while not done:
+      state_tensor = state.unsqueeze(0)
+      with torch.no_grad():
+        action, _ = self.actor.sample(state_tensor)
+      action = action.detach().cpu().numpy()[0]
+
+      next_state, reward, terminated, truncated, info = self.env.step(action)
+      next_state = torch.FloatTensor(next_state).to(self.device)
+      done = terminated or truncated
+
+      if render:
+        frame = self.env.render()
+        frames.append(frame)
+
+      episode_reward += reward
+      state = next_state
+
+    # Define success condition
+    success = not terminated and not truncated and episode_reward >= 0
+
+    # Always return frames, even if empty
+    return success, episode_reward, frames

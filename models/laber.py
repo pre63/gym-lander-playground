@@ -108,18 +108,17 @@ class Model:
 
   def train(self):
     """
-    Train the model for one episode and return the episode reward and rewards per step.
+    Train the model for one episode and return the episode reward and history.
 
     Returns:
         episode_reward (float): Total reward obtained in the episode.
-        trajectory (list): The trajectory of the agent..
+        history (list): The history of the agent.
     """
     state, _ = self.env.reset()
     state = torch.FloatTensor(state).to(self.device)
     done = False
     episode_reward = 0
-    trajectory = []
-    frames = []
+    history = []
 
     while not done:
       # Select an action
@@ -136,19 +135,18 @@ class Model:
       self.train_step()
 
       # Update state and rewards
-      trajectory.append({
+      history.append({
           "state": state.cpu().numpy().tolist(),
           "action": action.tolist(),
           "reward": reward,
+          "episode_reward": episode_reward,
           "next_state": next_state.cpu().numpy().tolist(),
           "done": done
       })
       state = next_state
       episode_reward += reward
 
-      frames.append(self.env.render())
-
-    return episode_reward, trajectory, frames
+    return episode_reward, history
 
   def train_step(self):
     """
@@ -206,3 +204,73 @@ class Model:
     # Soft update of target critic
     for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
       target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+  def save(self, filename):
+    """
+    Save the model parameters to a file.
+
+    Args:
+        filename (str): Path to the file.
+    """
+    torch.save({
+        "actor": self.actor.state_dict(),
+        "critic": self.critic.state_dict(),
+        "actor_optimizer": self.actor_optimizer.state_dict(),
+        "critic_optimizer": self.critic_optimizer.state_dict(),
+        "parameters": self.parameters
+    }, filename)
+
+  def load(self, filename):
+    """
+    Load the model parameters from a file.
+
+    Args:
+        filename (str): Path to the file.
+    """
+    checkpoint = torch.load(filename)
+    self.actor.load_state_dict(checkpoint["actor"])
+    self.critic.load_state_dict(checkpoint["critic"])
+    self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer"])
+    self.critic_optimizer.load_state_dict(checkpoint["critic_optimizer"])
+    self.parameters = checkpoint["parameters"]
+
+  def evaluate(self, render=False):
+    """
+    Run the algorithm without training and return success, rewards, and frames.
+
+    Args:
+        render (bool): Whether to render the environment during evaluation.
+
+    Returns:
+        success (bool): Whether the evaluation was successful based on the defined criteria.
+        episode_reward (float): Total reward obtained in the episode.
+        frames (list): List of frames (empty if render is False).
+    """
+    state, _ = self.env.reset()
+    state = torch.FloatTensor(state).to(self.device)
+    done = False
+    episode_reward = 0
+    frames = []
+
+    while not done:
+      # Select action using the current policy
+      state_tensor = state.unsqueeze(0)
+      action = self.actor(state_tensor).detach().cpu().numpy()[0]
+      action = np.clip(action, -self.max_action, self.max_action)
+
+      next_state, reward, terminated, truncated, info = self.env.step(action)
+      next_state = torch.FloatTensor(next_state).to(self.device)
+      done = terminated or truncated
+
+      episode_reward += reward
+
+      if render:
+        frame = self.env.render()
+        frames.append(frame)
+
+      state = next_state
+
+    # Define success condition
+    success = not terminated and not truncated and episode_reward >= 0
+
+    return success, episode_reward, frames

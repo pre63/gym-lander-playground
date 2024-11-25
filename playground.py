@@ -4,8 +4,8 @@ import numpy as np
 import importlib
 import json
 from datetime import datetime
+
 import gymnasium as gym
-from gymnasium.wrappers import RecordVideo
 from reward import REWARD_STRATEGIES
 
 
@@ -26,9 +26,9 @@ def save_results_to_disk(results, folder_name):
     json.dump(results, f, indent=4)
 
 
-def save_best_episode(folder_name, best_episode):
-  with open(os.path.join(folder_name, "best_episode.json"), "w") as f:
-    json.dump(best_episode, f, indent=4)
+def save_best_episode(folder_name, frames):
+  if frames:
+    np.savez_compressed(os.path.join(folder_name, "best_episode.npz"), frames=np.array(frames))
 
 
 def load_model(model_name):
@@ -56,6 +56,35 @@ def wrap_environment(env, reward_strategy):
       return state, custom_reward, terminated, truncated, info
 
   return RewardWrapper(env, reward_strategy)
+
+
+def evaluate_model(model, trials=1000):
+  """
+  Evaluate the model over multiple trials and collect statistics.
+  Args:
+      model: The trained model to evaluate.
+      trials (int): Number of evaluation trials.
+  Returns:
+      stats (dict): A dictionary containing evaluation metrics.
+  """
+  all_rewards = []
+  success_count = 0
+
+  for _ in range(trials):
+    success, episode_reward, _ = model.evaluate(render=False)
+    all_rewards.append(episode_reward)
+
+    if success:
+      success_count += 1
+
+  stats = {
+      "eval_average_reward": np.mean(all_rewards),
+      "eval_variance_reward": np.var(all_rewards),
+      "eval_success_rate": success_count / trials,
+      "eval_rewards": all_rewards
+  }
+
+  return stats
 
 
 def main():
@@ -103,46 +132,62 @@ def main():
   run_model(model, num_episodes, results_folder, env)
 
 
-def run_model(model, num_episodes, results_folder, env):
+def run_model(model, num_episodes, results_folder, env, evaluation_episodes=100):
   all_rewards = []
-  best_episode = {"episode": None, "reward": float("-inf"), "trajectory": []}
+  best_episode = {"episode": None, "reward": float("-inf"), "history": []}
 
   start_time = datetime.now()
 
   for episode in range(num_episodes):
-    # Get data from model.train() which handles the episode logic
-    episode_reward, trajectory, frames = model.train()
+    episode_reward, history = model.train()
     all_rewards.append(episode_reward)
 
     # Update best episode if this one has a higher reward
     if episode_reward > best_episode["reward"]:
-      np.savez_compressed(os.path.join(results_folder, f"best_episode.npz"), frames=np.array(frames))
       best_episode.update({
           "episode": episode,
           "reward": episode_reward,
-          "trajectory": trajectory,
+          "history": history,
       })
 
     print(f"Episode {episode + 1}/{num_episodes}, Reward: {episode_reward}")
-
   end_time = datetime.now()
 
-  # Save results
+  # Evaluate the model after training
+  stats = evaluate_model(model, trials=evaluation_episodes)
+
+  # Run one evaluation with rendering to capture frames for the best episode
+  success, episode_reward, frames = model.evaluate(render=True)
+  save_best_episode(results_folder, frames)
+
+  # Combine training and evaluation results
   results = {
       "all_rewards": all_rewards,
       "average_reward": sum(all_rewards) / len(all_rewards),
       "variance_in_rewards": sum((x - sum(all_rewards) / len(all_rewards)) ** 2 for x in all_rewards) / len(all_rewards),
       "average_time": (end_time - start_time).total_seconds() / num_episodes,
+      "eval_average_reward": stats["eval_average_reward"],
+      "eval_variance_reward": stats["eval_variance_reward"],
+      "eval_success_rate": stats["eval_success_rate"],
+      "eval_rewards": stats["eval_rewards"],
   }
 
   save_results_to_disk(results, results_folder)
-  save_best_episode(results_folder, best_episode)
 
-  env.close()
+  print("\nAverage Reward:", results["average_reward"])
+  print("Variance in Reward:", results["variance_in_rewards"])
+  print("Average Time:", results["average_time"])
+  print("Evaluation Average Reward:", results["eval_average_reward"])
+  print("Evaluation Variance Reward:", results["eval_variance_reward"])
+  print("Evaluation Success Rate:", results["eval_success_rate"])
+
   print(f"Results saved in folder: {results_folder}")
   print(f"\nTo replay the best episode, run:\n")
   print(f"    python replay.py {results_folder}")
   print(f"\n")
+
+  # Save the model
+  model.save(os.path.join(results_folder, "model"))
 
 
 if __name__ == "__main__":

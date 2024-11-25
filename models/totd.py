@@ -81,31 +81,33 @@ class Model:
         lambda_=lambd,
         theta_init=theta_init
     )
-    self.best_episode_reward = -np.inf
+    self.parameters = {
+        "alpha": alpha,
+        "gamma": gamma,
+        "lambda": lambd
+    }
     self.best_cumulative_rewards = []
-    self.previous_rewards_per_step = []
 
   def train(self):
     """
-    Train the model for one episode and return the episode reward, trajectory, and frames.
+    Train the model for one episode and return the episode reward and history.
     Returns:
         episode_reward (float): Total reward obtained in the episode.
-        trajectory (list): The trajectory of the agent.
-        frames (list): Rendered frames of the episode.
+        history (list): The history of the agent.
     """
     state, _ = self.env.reset()
     done = False
     episode_reward = 0
-    trajectory = []
-    frames = []
+    history = []
+
     cumulative_rewards = []
     t = 0  # Time step
 
     self.algorithm.reset_traces()
 
     while not done:
-      action = self.env.action_space.sample()  # Random action; replace with a policy if needed
-      next_state, reward, terminated, truncated, _ = self.env.step(action)
+      action = self.env.action_space.sample()  # Random action; replace with a policy if available
+      next_state, reward, terminated, truncated, info = self.env.step(action)
       done = terminated or truncated
 
       # Convert states to feature vectors (phi_t and phi_t1)
@@ -117,59 +119,65 @@ class Model:
       cumulative_rewards.append(episode_reward)
       t += 1
 
-      # Append trajectory
-      trajectory.append({
-          "state": state.tolist() if isinstance(state, np.ndarray) else state,
+      # Append history
+      history.append({
+          "state": state.tolist(),
           "action": action.tolist() if isinstance(action, np.ndarray) else action,
           "reward": reward,
-          "next_state": next_state.tolist() if isinstance(next_state, np.ndarray) else next_state,
+          "episode_reward": episode_reward,
+          "next_state": next_state.tolist(),
           "done": done
       })
 
-      # **Inferential Statistics Logic**
-      render_frame = True
-      if self.best_episode_reward > -np.inf and t < len(self.best_cumulative_rewards):
-        # Calculate the difference in cumulative rewards
-        current_cumulative = episode_reward
-        best_cumulative = self.best_cumulative_rewards[t - 1]  # Adjust index for zero-based
+      state = next_state
 
-        # Estimate the anticipated total reward
-        steps_remaining = self.env.spec.max_episode_steps - t if self.env.spec.max_episode_steps else 1000 - t
-        avg_reward_per_step = episode_reward / t
-        anticipated_total_reward = episode_reward + avg_reward_per_step * steps_remaining
+    return episode_reward, history
 
-        # Calculate mean and standard deviation of rewards per step from previous episodes
-        if len(self.previous_rewards_per_step) > 1:
-          mean_best = np.mean(self.previous_rewards_per_step)
-          std_best = np.std(self.previous_rewards_per_step, ddof=1)
+  def save(self, filename):
+    """
+    Save the model to a file.
+    Args:
+        filename (str): The name of the file to save the model to.
+    """
+    np.save(filename, self.algorithm.theta)
 
-          # Perform one-sample t-test
-          t_stat, p_value = stats.ttest_1samp(
-              [avg_reward_per_step],
-              popmean=mean_best
-          )
+  def load(self, filename):
+    """
+    Load the model from a file.
+    Args:
+        filename (str): The name of the file to load the model from.
+    """
+    self.algorithm.theta = np.load(filename)
 
-          # If p-value is greater than 0.05 (not significantly better), stop rendering
-          if p_value > 0.05 and anticipated_total_reward < self.best_episode_reward:
-            render_frame = False
-        else:
-          # If not enough data, use a simple threshold
-          if anticipated_total_reward < 0.9 * self.best_episode_reward:
-            render_frame = False
+  def evaluate(self, render=False):
+    """
+    Evaluate the model without training and return success and rewards.
+    Args:
+        render (bool): Whether to render the environment during evaluation.
+    Returns:
+        success (bool): Whether the evaluation was successful based on the defined criteria.
+        episode_reward (float): Total reward obtained in the episode.
+        frames (list): List of frames if rendering is enabled.
+    """
+    state, _ = self.env.reset()
+    done = False
+    episode_reward = 0
+    frames = []
 
-      # Render frame if needed
-      if render_frame:
-        frames.append(self.env.render())
+    while not done:
+      action = self.env.action_space.sample()  # Random action; replace with a policy if available
+      next_state, reward, terminated, truncated, info = self.env.step(action)
+      done = terminated or truncated
+
+      episode_reward += reward
+
+      if render:
+        frame = self.env.render()
+        frames.append(frame)
 
       state = next_state
 
-    # Update best episode reward and cumulative rewards if current is better
-    if episode_reward > self.best_episode_reward:
-      self.best_episode_reward = episode_reward
-      self.best_cumulative_rewards = cumulative_rewards
+    # Define success condition
+    success = not terminated and not truncated and episode_reward >= 0
 
-    # Store the average reward per step for inferential statistics
-    avg_reward_per_step = episode_reward / t
-    self.previous_rewards_per_step.append(avg_reward_per_step)
-
-    return episode_reward, trajectory, frames
+    return success, episode_reward, frames

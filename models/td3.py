@@ -66,7 +66,7 @@ class Model:
         "noise_clip": noise_clip,
         "policy_freq": policy_freq
     }
-    
+
     self.env = env
     self.state_dim = env.observation_space.shape[0]
     self.action_dim = env.action_space.shape[0]
@@ -178,14 +178,13 @@ class Model:
     Train the model for one episode and return the episode reward.
     Returns:
         episode_reward (float): Total reward obtained in the episode.
-        trajectory (list): The trajectory of the agent..
+        history (list): The history of the agent..
     """
     state, _ = self.env.reset()
     state = torch.FloatTensor(state).to(self.device)
     done = False
     episode_reward = 0
-    trajectory = []
-    frames = []
+    history = []
 
     while not done:
       state_tensor = state.unsqueeze(0)
@@ -200,15 +199,73 @@ class Model:
       self.update()
 
       state = next_state
-      trajectory.append({
+      history.append({
           "state": state.cpu().numpy().tolist(),
           "action": action.tolist(),
           "reward": reward,
+          "episode_reward": episode_reward,
           "next_state": next_state.cpu().numpy().tolist(),
           "done": done
       })
       episode_reward += reward
 
-      frames.append(self.env.render())
+    return episode_reward, history
 
-    return episode_reward, trajectory, frames
+  def save(self, filename):
+    torch.save({
+        "actor": self.actor.state_dict(),
+        "critic_1": self.critic_1.state_dict(),
+        "critic_2": self.critic_2.state_dict(),
+        "actor_optimizer": self.actor_optimizer.state_dict(),
+        "critic_optimizer_1": self.critic_optimizer_1.state_dict(),
+        "critic_optimizer_2": self.critic_optimizer_2.state_dict(),
+        "parameters": self.parameters
+    }, filename)
+
+  def load(self, filename):
+    checkpoint = torch.load(filename)
+    self.actor.load_state_dict(checkpoint["actor"])
+    self.critic_1.load_state_dict(checkpoint["critic_1"])
+    self.critic_2.load_state_dict(checkpoint["critic_2"])
+    self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer"])
+    self.critic_optimizer_1.load_state_dict(checkpoint["critic_optimizer_1"])
+    self.critic_optimizer_2.load_state_dict(checkpoint["critic_optimizer_2"])
+    self.parameters = checkpoint["parameters"]
+
+  def evaluate(self, render=False):
+    """
+    Evaluate the model without training and return success, rewards, and frames.
+    Args:
+        render (bool): Whether to render the environment during evaluation.
+    Returns:
+        success (bool): Whether the evaluation was successful based on the defined criteria.
+        episode_reward (float): Total reward obtained in the episode.
+        frames (list): List of frames (always returned, even if empty).
+    """
+    state, _ = self.env.reset()
+    state = torch.FloatTensor(state).to(self.device)
+    done = False
+    episode_reward = 0
+    frames = []
+
+    while not done:
+      state_tensor = state.unsqueeze(0)
+      with torch.no_grad():
+        action = self.actor(state_tensor).detach().cpu().numpy()[0]
+      action = np.clip(action, -self.max_action, self.max_action)
+
+      next_state, reward, terminated, truncated, _ = self.env.step(action)
+      next_state = torch.FloatTensor(next_state).to(self.device)
+      done = terminated or truncated
+
+      if render:
+        frame = self.env.render()
+        frames.append(frame)
+
+      episode_reward += reward
+      state = next_state
+
+    # Define success condition
+    success = not terminated and not truncated and episode_reward >= 0
+
+    return success, episode_reward, frames

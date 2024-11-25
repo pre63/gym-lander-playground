@@ -32,15 +32,15 @@ class Model:
     Train the model for one episode and return the episode reward.
     Returns:
         episode_reward (float): Total reward obtained in the episode.
-        trajectory (list): The trajectory of the agent..
+        history (list): The history of the agent..
     """
     self.model.learn(total_timesteps=1000)  # Adjust timesteps as needed
 
     # Evaluate the model to get episode reward
     state, _ = self.env.reset()
     episode_reward = 0
-    trajectory = []
-    frames = []
+    history = []
+
     done = False
 
     while not done:
@@ -48,10 +48,11 @@ class Model:
       next_state, reward, terminated, truncated, _ = self.env.step(action)
       done = terminated or truncated
 
-      trajectory.append({
+      history.append({
           "state": state.tolist(),
           "action": action.tolist(),
           "reward": reward,
+          "episode_reward": episode_reward,
           "next_state": next_state.tolist(),
           "done": done
       })
@@ -60,6 +61,53 @@ class Model:
 
       episode_reward += reward
 
-      frames.append(self.env.render())
+    return episode_reward, history
 
-    return episode_reward, trajectory, frames
+  def save(self, filename):
+    """
+    Save the model to a file.
+    Args:
+        filename (str): The name of the file to save.
+    """
+    self.model.save(filename)
+
+  def load(self, filename):
+    """
+    Load the model from a file.
+    Args:
+        filename (str): The name of the file to load.
+    """
+    self.model.load(filename)
+
+  def evaluate(self, render=False):
+    """
+    Evaluate the model without training and return success, rewards, and frames.
+    Args:
+        render (bool): Whether to render the environment during evaluation.
+    Returns:
+        success (bool): Whether the evaluation was successful based on the defined criteria.
+        episode_reward (float): Total reward obtained in the episode.
+        frames (list): List of frames (always returned, even if empty).
+    """
+    state, _ = self.env.reset()
+    episode_reward = 0
+    frames = []
+    done = False
+
+    while not done:
+      action, _states = self.model.predict(state, deterministic=True)
+      next_state, reward, terminated, truncated, info = self.env.step(action)
+      done = terminated or truncated
+
+      if render:
+        frame = self.env.render()
+        frames.append(frame)
+
+      episode_reward += reward
+      state = next_state
+
+    # Define success condition
+    success = not terminated and not truncated and episode_reward >= 0
+
+    # Always return frames, even if empty
+    return success, episode_reward, frames
