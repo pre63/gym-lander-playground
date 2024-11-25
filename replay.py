@@ -37,8 +37,8 @@ def replay_best_episode(results_folder):
   output_video = os.path.join(results_folder, "best_episode.mp4")
 
   try:
-    height, width, _ = frames[0].shape
     input_file = os.path.join(results_folder, "temp_frames.raw")
+    height, width, _ = frames[0].shape
 
     # Save raw RGB frames to a binary file
     with open(input_file, "wb") as f:
