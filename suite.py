@@ -76,7 +76,7 @@ def initiate_models(env):
 
 def main():
   if len(sys.argv) < 2:
-    print("Usage: python suite.py [episodes] [optional_env]")
+    print("Usage: python suite.py [episodes] [stratery] [optional_env]")
     sys.exit(1)
 
   try:

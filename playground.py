@@ -148,6 +148,7 @@ def run_model(model, num_episodes, results_folder, env, evaluation_episodes=1000
           "episode": episode,
           "reward": episode_reward,
           "history": history,
+          "model_params": model.parameters
       })
 
     print(f"Episode {episode + 1}/{num_episodes}, Reward: {episode_reward}")

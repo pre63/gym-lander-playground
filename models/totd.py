@@ -83,6 +83,7 @@ class Model:
         lambda_=lambda_,
         theta_init=theta_init
     )
+    
     self.parameters = {
         "alpha": alpha,
         "gamma": gamma,
