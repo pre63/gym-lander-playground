@@ -149,7 +149,7 @@ class Model:
     Args:
         filename (str): The name of the file to load the model from.
     """
-    self.algorithm.theta = np.load(filename)
+    self.algorithm.theta = np.load(filename + ".npy")
 
   def evaluate(self, render=False):
     """

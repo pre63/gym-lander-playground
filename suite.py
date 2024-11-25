@@ -85,10 +85,9 @@ def main():
     print("Error: Number of episodes must be an integer.")
     sys.exit(1)
 
-  # Use LunarLanderContinuous-v3 as the default environment, allow override
-  env_name = sys.argv[2] if len(sys.argv) > 2 else "LunarLanderContinuous-v3"
+  reward_strategy_name = "default" if len(sys.argv) < 3 else sys.argv[2]
 
-  reward_strategy_name = "default" if len(sys.argv) < 4 else sys.argv[3]
+  env_name = "LunarLanderContinuous-v3" if len(sys.argv) < 4 else sys.argv[3]
 
   try:
     env = gym.make(env_name, render_mode="rgb_array")

@@ -32,7 +32,7 @@ def save_best_episode(folder_name, frames):
 
 
 def load_model(model_name):
-  model_path = f"models.{model_name}"
+  model_path = f"models.{model_name.lower()}"
   try:
     module = importlib.import_module(model_path)
     return module.Model
@@ -170,6 +170,7 @@ def run_model(model, num_episodes, results_folder, env, evaluation_episodes=100)
       "eval_variance_reward": stats["eval_variance_reward"],
       "eval_success_rate": stats["eval_success_rate"],
       "eval_rewards": stats["eval_rewards"],
+      "gen": "V3"
   }
 
   save_results_to_disk(results, results_folder)
