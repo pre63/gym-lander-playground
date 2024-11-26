@@ -55,7 +55,7 @@ def evaluate_model(results_folder, evaluation_trials):
     all_rewards.append(episode_reward)
     if success:
       success_count += 1
-    print(f"Trial {i + 1}/{evaluation_trials}: Reward: {episode_reward}, Success: {success}")
+    print(f"Trial {i + 1}/{evaluation_trials}: Reward: {episode_reward}, {'Landed' if success else 'Crash'}")
 
   # Compute statistics
   average_reward = np.mean(all_rewards)
@@ -65,7 +65,8 @@ def evaluate_model(results_folder, evaluation_trials):
   print("\nEvaluation Results:")
   print(f"  Average Reward: {average_reward}")
   print(f"  Reward Variance: {variance_reward}")
-  print(f"  Success Rate: {success_rate * 100:.2f}%")
+  print(f"  Success Count: {success_count}")
+  print(f"  Success Rate: {success_rate}")
 
   # Save results
   results_json_file = os.path.join(results_folder, "results.json")

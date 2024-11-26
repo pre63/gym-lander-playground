@@ -8,3 +8,4 @@ pandas
 jupyter
 ipykernel
 scipy
+opencv-python

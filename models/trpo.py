@@ -2,7 +2,7 @@ import gymnasium as gym
 from sb3_contrib import TRPO
 
 from success import check_success
-
+from telemetry import add_telemetry_overlay, add_success_failure_to_frames
 
 class Model:
   def __init__(self, env: gym.Env, gamma=0.99, gae_lambda=0.95, target_kl=0.01, net_arch=[64, 64]):
@@ -66,8 +66,9 @@ class Model:
 
     # Perform a learning step with a fixed number of timesteps
     self.model.learn(total_timesteps=1000, reset_num_timesteps=False)
-
-    return episode_reward, history
+    
+    success = check_success(next_state, terminated)
+    return success, episode_reward, history
 
   def save(self, filename):
     """
@@ -108,11 +109,13 @@ class Model:
       episode_reward += reward
 
       if render:
-        frame = self.env.render()
+        frame = add_telemetry_overlay(self.env.render(), next_state)
         frames.append(frame)
 
       state = next_state
 
     success = check_success(next_state, terminated)
+    if render:
+      frames = add_success_failure_to_frames(frames, success)
 
     return success, episode_reward, frames if render else None

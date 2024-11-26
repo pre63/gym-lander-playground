@@ -38,6 +38,6 @@ def check_success(observation,
   legs_in_contact = leg_contact_left and leg_contact_right
 
   # Success condition
-  success = terminated and lander_is_upright and lander_within_landing_pad and velocities_within_limits and legs_in_contact
+  success = terminated and lander_is_upright and lander_within_landing_pad and velocities_within_limits and legs_in_contact and y_position >= 0
 
   return success

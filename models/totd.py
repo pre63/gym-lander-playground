@@ -3,7 +3,7 @@ import gymnasium as gym
 from scipy import stats
 
 from success import check_success
-
+from telemetry import add_telemetry_overlay, add_success_failure_to_frames
 
 class TrueOnlineTDLambdaReplay:
   def __init__(self, alpha, gamma, lambda_, theta_init):
@@ -83,7 +83,7 @@ class Model:
         lambda_=lambda_,
         theta_init=theta_init
     )
-    
+
     self.parameters = {
         "alpha": alpha,
         "gamma": gamma,
@@ -128,7 +128,8 @@ class Model:
 
       state = next_state
 
-    return episode_reward, history
+    success = check_success(next_state, terminated)
+    return success, episode_reward, history
 
   def select_action(self, state):
     """
@@ -189,9 +190,11 @@ class Model:
       episode_reward += reward
 
       if render:
-        frames.append(self.env.render())
+        frames.append(add_telemetry_overlay(self.env.render(), next_state))
 
       state = next_state
 
     success = check_success(next_state, terminated)
+    if render:
+      frames = add_success_failure_to_frames(frames, success)
     return success, episode_reward, frames

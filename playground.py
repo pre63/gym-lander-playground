@@ -139,7 +139,7 @@ def run_model(model, num_episodes, results_folder, env, evaluation_episodes=1000
   start_time = datetime.now()
 
   for episode in range(num_episodes):
-    episode_reward, history = model.train()
+    success, episode_reward, history = model.train()
     all_rewards.append(episode_reward)
 
     # Update best episode if this one has a higher reward
@@ -151,15 +151,12 @@ def run_model(model, num_episodes, results_folder, env, evaluation_episodes=1000
           "model_params": model.parameters
       })
 
-    print(f"Episode {episode + 1}/{num_episodes}, Reward: {episode_reward}")
+    print(f"Episode {episode + 1}/{num_episodes}, Reward: {episode_reward}, {'Landed' if success else 'Crashed'}")
+
   end_time = datetime.now()
 
   # Evaluate the model after training
   stats = evaluate_model(model, trials=evaluation_episodes)
-
-  # Run one evaluation with rendering to capture frames for the best episode
-  success, episode_reward, frames = model.evaluate(render=True)
-  save_best_episode(results_folder, frames)
 
   # Combine training and evaluation results
   results = {
@@ -183,6 +180,16 @@ def run_model(model, num_episodes, results_folder, env, evaluation_episodes=1000
   print("Evaluation Variance Reward:", results["eval_variance_reward"])
   print("Evaluation Success Rate:", results["eval_success_rate"])
 
+  # Run one evaluation with rendering to capture frames for the best episode
+  if stats["eval_success_rate"] > 0.10:
+    while True:
+      success, episode_reward, frames = model.evaluate(render=True)
+      if success:
+        break
+  else:
+    success, episode_reward, frames = model.evaluate(render=True)
+
+  save_best_episode(results_folder, frames)
   print(f"Results saved in folder: {results_folder}")
   print(f"\nTo replay the best episode, run:\n")
   print(f"    python replay.py {results_folder}")

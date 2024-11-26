@@ -7,7 +7,7 @@ import random
 import gymnasium as gym
 
 from success import check_success
-
+from telemetry import add_telemetry_overlay, add_success_failure_to_frames
 
 class ReplayBuffer:
   def __init__(self, buffer_size=100000, batch_size=256, large_batch_multiplier=4, device="cpu"):
@@ -228,7 +228,8 @@ class Model:
       episode_reward += reward
       state = next_state
 
-    return episode_reward, history
+    success = check_success(next_state, terminated)
+    return success, episode_reward, history
 
   def save(self, filename):
     """
@@ -288,13 +289,15 @@ class Model:
       episode_reward += reward
 
       if render:
-        frame = self.env.render()
+        frame = add_telemetry_overlay(self.env.render(), next_state)
         frames.append(frame)
 
       state = next_state
 
     # Define success condition
     success = check_success(next_state, terminated)
+    if render:
+      frames = add_success_failure_to_frames(frames, success)
 
     # Always return frames, even if empty
     return success, episode_reward, frames

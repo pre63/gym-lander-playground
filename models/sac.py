@@ -7,7 +7,7 @@ from collections import deque
 import random
 
 from success import check_success
-
+from telemetry import add_telemetry_overlay, add_success_failure_to_frames
 
 class Actor(nn.Module):
   def __init__(self, state_dim, action_dim, max_action):
@@ -211,7 +211,8 @@ class Model:
       episode_reward += reward
       state = next_state
 
-    return episode_reward, history
+    success = check_success(next_state, terminated)
+    return success, episode_reward, history
 
   def save(self, filename):
     torch.save(self.actor.state_dict(), filename + "_actor")
@@ -250,7 +251,7 @@ class Model:
       done = terminated or truncated
 
       if render:
-        frame = self.env.render()
+        frame = add_telemetry_overlay(self.env.render(), next_state)
         frames.append(frame)
 
       episode_reward += reward
@@ -258,6 +259,8 @@ class Model:
 
     # Define success condition
     success = check_success(next_state, terminated)
+    if render:
+      frames = add_success_failure_to_frames(frames, success)
 
     # Always return frames, even if empty
     return success, episode_reward, frames
