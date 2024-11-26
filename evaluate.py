@@ -34,9 +34,9 @@ def get_env_and_model(results_folder):
 def render_sample(results_folder):
   print("Rendering sample...")
 
-  def save(folder_name, frames):
+  def save(frames):
     if frames:
-      np.savez_compressed(os.path.join(folder_name, "best_episode.npz"), frames=np.array(frames))
+      np.savez_compressed(os.path.join(results_folder, "best_episode.npz"), frames=np.array(frames))
 
   def render():
     state, _ = env.reset()
@@ -64,22 +64,24 @@ def render_sample(results_folder):
   env, model, model_name, env_name = get_env_and_model(results_folder)
 
   success = False
+  prev_rewards = 0
+
+  samples = []
 
   attempts = 0
-  while not success:
-    if success or attempts > 5:
-      break
+  while (not success) and attempts < 10:
     attempts += 1
     success, episode_reward, frames = render()
+    samples.append((success, episode_reward, frames))
 
-  save(results_folder, frames)
+  success, prev_rewards, frames = max(samples, key=lambda x: x[1])
+  save(frames)
 
-  print(f"Results saved in folder: {results_folder}")
+  print(f"Results saved in folder: {results_folder}, with {attempts} attempts.")
+  print(f"Success: {success}, Reward: {prev_rewards}")
   print(f"\nTo replay the best episode, run:\n")
   print(f"    python replay.py {results_folder}")
   print(f"\n")
-
-  return success, episode_reward, frames
 
 
 def evaluate_model(results_folder, evaluation_trials):
@@ -102,7 +104,6 @@ def evaluate_model(results_folder, evaluation_trials):
   # Run evaluation
   all_rewards = []
   success_count = 0
-  print(f"\nRunning {evaluation_trials} evaluation trials...\n")
 
   for i in range(evaluation_trials):
     state, _ = env.reset()
@@ -121,8 +122,6 @@ def evaluate_model(results_folder, evaluation_trials):
     all_rewards.append(episode_reward)
     if success:
       success_count += 1
-
-    print(f"Trial {i + 1}/{evaluation_trials}: Reward: {episode_reward}, {'Landed' if success else 'Crash'}")
 
   # Compute statistics
   average_reward = np.mean(all_rewards)

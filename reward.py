@@ -27,7 +27,7 @@ def default_reward(state, reward, action, done, info):
   if done:
     success = check_success(state, done)
     if success:
-      reward = max(reward + 200, 200)
+      reward = max(reward + 200.0, 200.0)
 
   return reward
 
@@ -41,10 +41,10 @@ def proximity_reward(state, reward, action, done, info):
   if done:
     success = check_success(state, done)
     if success:
-      award = 200 + -x_position**2
-      reward = max(reward + award, 200)
+      award = 200.0 + -x_position**2
+      reward = max(reward + award, 200.0)
     else:
-      reward = min(reward - 100, -100)
+      reward = reward - 100.0
 
   return reward
 
@@ -62,11 +62,11 @@ def energy_efficient_reward(state, reward, action, done, info):
   if done:
     success = check_success(state, done)
     if success:
-      award = 200 + -x_position**2 * 0.1 * (fuel_usage - 1.0)
+      award = 200.0 + -x_position**2 * 0.1 * (fuel_usage - 1.0)
 
-      reward = max(reward + 200, 200)
+      reward = max(reward + award, 200.0)
     else:
-      reward = min(reward - 100, -100)
+      reward = reward - 100.0
 
   return reward
 
@@ -90,6 +90,6 @@ def combined_reward(state, reward, action, done, info):
 REWARD_STRATEGIES = {
     "default": default_reward,
     "proximity": proximity_reward,
-    "energy_efficient": energy_efficient_reward,
+    "energy": energy_efficient_reward,
     "combined": combined_reward,
 }

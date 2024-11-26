@@ -1,4 +1,4 @@
-from stable_baselines3 import TRPO
+from sb3_contrib import TRPO
 
 from models.sb import SBase
 
