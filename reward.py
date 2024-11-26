@@ -1,11 +1,34 @@
-# reward.py
 import numpy as np
+import gymnasium as gym
+from success import check_success
+
+
+class RewardWrapper(gym.Wrapper):
+  def __init__(self, env, reward_strategy):
+    super().__init__(env)
+
+    self.reward_strategy = reward_strategy
+
+    if reward_strategy not in REWARD_STRATEGIES:
+      raise ValueError(f"Unknown reward strategy: {reward_strategy}")
+
+    self.reward_fn = REWARD_STRATEGIES[reward_strategy]
+
+  def step(self, action):
+    state, reward, terminated, truncated, info = self.env.step(action)
+    custom_reward = self.reward_fn(state, reward, action, terminated or truncated, info)
+    return state, custom_reward, terminated, truncated, info
 
 
 def default_reward(state, reward, action, done, info):
   """
   Default reward strategy from the environment.
   """
+  if done:
+    success = check_success(state, done)
+    if success:
+      reward = max(reward + 200, 200)
+
   return reward
 
 
@@ -13,19 +36,15 @@ def proximity_reward(state, reward, action, done, info):
   """
   Reward strategy prioritizing proximity to the target and low velocity.
   """
-  distance_to_target = np.linalg.norm(state[:2])
-  vertical_velocity = abs(state[2])
-  horizontal_velocity = abs(state[3])
-
-  reward = -distance_to_target**2  # Quadratic penalty for distance
-  reward -= 10 * vertical_velocity * (1 / (distance_to_target + 1))  # Scale penalty with proximity
-  reward -= 5 * horizontal_velocity * (1 / (distance_to_target + 1))
+  x_position = observation[0]
 
   if done:
-    if info.get("landed_successfully", False):
-      reward += 100 - 2 * (vertical_velocity + horizontal_velocity)  # Scaled success bonus
+    success = check_success(state, done)
+    if success:
+      award = 200 + -x_position**2
+      reward = max(reward + award, 200)
     else:
-      reward -= 100
+      reward = min(reward - 100, -100)
 
   return reward
 
@@ -35,17 +54,19 @@ def energy_efficient_reward(state, reward, action, done, info):
   Reward strategy prioritizing energy efficiency during landing.
   """
   fuel_usage = np.linalg.norm(action)  # Action magnitude as a proxy for fuel usage
-  distance_to_target = np.linalg.norm(state[:2])
+  x_position = state[0]
 
-  reward = -distance_to_target**2  # Quadratic penalty for distance
   if fuel_usage > 1.0:  # Penalize only excessive fuel usage
     reward -= 0.1 * (fuel_usage - 1.0)
 
   if done:
-    if info.get("landed_successfully", False):
-      reward += 100 - 0.1 * fuel_usage  # Success bonus scaled by fuel efficiency
+    success = check_success(state, done)
+    if success:
+      award = 200 + -x_position**2 * 0.1 * (fuel_usage - 1.0)
+
+      reward = max(reward + 200, 200)
     else:
-      reward -= 100
+      reward = min(reward - 100, -100)
 
   return reward
 

@@ -3,7 +3,83 @@ import sys
 import json
 import numpy as np
 import gymnasium as gym
-from playground import load_model
+
+from models.utils import load_model
+from success import check_success
+from telemetry import add_telemetry_overlay, add_success_failure_to_frames
+
+
+def get_env_and_model(results_folder):
+  # Load the configuration
+  config_path = os.path.join(results_folder, "config.json")
+  if not os.path.exists(config_path):
+    print(f"Error: Configuration file not found at {config_path}")
+    sys.exit(1)
+
+  with open(config_path, "r") as f:
+    config = json.load(f)
+
+  model_name = config["model"]
+  env_name = config["environment"]
+
+  # Load the model
+  model_class = load_model(model_name)
+  model = model_class(env_name, model_type="gym")
+  model_path = os.path.join(results_folder, "model")
+  model.load(model_path)
+
+  return model.env, model, model_name, env_name
+
+
+def render_sample(results_folder):
+  print("Rendering sample...")
+
+  def save(folder_name, frames):
+    if frames:
+      np.savez_compressed(os.path.join(folder_name, "best_episode.npz"), frames=np.array(frames))
+
+  def render():
+    state, _ = env.reset()
+    episode_reward = 0
+    frames = []
+    done = False
+
+    while not done:
+      action, _ = model.model.predict(state)
+      next_state, reward, terminated, truncated, info = env.step(action)
+      done = terminated or truncated
+
+      frame = env.render()
+      frame = add_telemetry_overlay(frame, next_state)
+      frames.append(frame)
+
+      episode_reward += reward
+      state = next_state
+
+    success = check_success(next_state, terminated)
+    frames = add_success_failure_to_frames(frames, success)
+
+    return success, episode_reward, frames
+
+  env, model, model_name, env_name = get_env_and_model(results_folder)
+
+  success = False
+
+  attempts = 0
+  while not success:
+    if success or attempts > 5:
+      break
+    attempts += 1
+    success, episode_reward, frames = render()
+
+  save(results_folder, frames)
+
+  print(f"Results saved in folder: {results_folder}")
+  print(f"\nTo replay the best episode, run:\n")
+  print(f"    python replay.py {results_folder}")
+  print(f"\n")
+
+  return success, episode_reward, frames
 
 
 def evaluate_model(results_folder, evaluation_trials):
@@ -17,44 +93,35 @@ def evaluate_model(results_folder, evaluation_trials):
   Returns:
       None
   """
-  # Load the configuration
-  config_path = os.path.join(results_folder, "config.json")
-  if not os.path.exists(config_path):
-    print(f"Error: Configuration file not found at {config_path}")
-    sys.exit(1)
-
-  with open(config_path, "r") as f:
-    config = json.load(f)
-
-  model_name = config["model"]
-  env_name = config["environment"]
+  env, model, model_name, env_name = get_env_and_model(results_folder)
 
   print(f"Evaluating model: {model_name}")
   print(f"Environment: {env_name}")
   print(f"Number of evaluation trials: {evaluation_trials}")
 
-  # Load the environment
-  try:
-    env = gym.make(env_name, render_mode="rgb_array")
-  except gym.error.Error as e:
-    print(f"Error: Unable to create environment '{env_name}'.\n{e}")
-    sys.exit(1)
-
-  # Load the model
-  model_class = load_model(model_name)
-  model = model_class(env)
-  model_path = os.path.join(results_folder, "model")
-  model.load(model_path)
-
   # Run evaluation
   all_rewards = []
   success_count = 0
   print(f"\nRunning {evaluation_trials} evaluation trials...\n")
+
   for i in range(evaluation_trials):
-    success, episode_reward, _ = model.evaluate(render=False)
+    state, _ = env.reset()
+    done = False
+    rewards = []
+    while not done:
+      action, _ = model.model.predict(state)
+      state, reward, terminated, truncated, info = env.step(action)
+      done = terminated or truncated
+
+      rewards.append(reward)
+
+    success = check_success(state, terminated)
+    episode_reward = np.sum(reward)
+
     all_rewards.append(episode_reward)
     if success:
       success_count += 1
+
     print(f"Trial {i + 1}/{evaluation_trials}: Reward: {episode_reward}, {'Landed' if success else 'Crash'}")
 
   # Compute statistics
@@ -69,13 +136,14 @@ def evaluate_model(results_folder, evaluation_trials):
   print(f"  Success Rate: {success_rate}")
 
   # Save results
+  os.makedirs(results_folder, exist_ok=True)
+
   results_json_file = os.path.join(results_folder, "results.json")
   with open(results_json_file, "r") as f:
     results = json.load(f)
-    results["eval_average_reward"] = average_reward
-    results["eval_variance_reward"] = variance_reward
-    results["eval_success_rate"] = success_rate
-    results["eval_rewards"] = all_rewards
+    results["average_reward"] = average_reward
+    results["variance_reward"] = variance_reward
+    results["success_rate"] = success_rate
 
   with open(results_json_file, "w") as f:
     json.dump(results, f, indent=4)

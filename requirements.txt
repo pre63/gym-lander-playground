@@ -9,3 +9,5 @@ jupyter
 ipykernel
 scipy
 opencv-python
+tqdm
+rich
