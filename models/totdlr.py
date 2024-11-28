@@ -1,9 +1,14 @@
 
-from envs.random_walk import RandomWalk
 import numpy as np
+
 import gymnasium as gym
 from gymnasium import spaces
-import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+from models.base import BaseModel, BaseConvertStableBaselinesModel
 
 
 class TrueOnlineTDLambdaCompressedReplayModel:
@@ -62,84 +67,140 @@ class TrueOnlineTDLambdaCompressedReplayModel:
     self.compressed_experience = {}
 
 
-class ActorCriticContinuous:
-  def __init__(self, state_space, action_space, critic_model, actor_lr=0.01):
-    self.state_space = state_space
-    self.action_space = action_space
-    self.critic = critic_model
-    self.actor_weights = np.random.randn(state_space, 1)  # Match to state dimensions
-    self.actor_lr = actor_lr
-    self.sigma = 1.0  # Fixed variance for Gaussian policy
+class ActorNetwork(nn.Module):
+  def __init__(self, state_dim, action_dim, hidden_dim=64, actor_lr=1e-3):
+    super(ActorNetwork, self).__init__()
+
+    self.model = nn.Sequential(
+        nn.Linear(state_dim, hidden_dim),
+        nn.ReLU(),
+        nn.Linear(hidden_dim, action_dim)
+    )
+
+    self.log_std = nn.Parameter(torch.zeros(action_dim))  # Learnable log standard deviation
+
+    self.optimizer = optim.Adam(self.parameters(), lr=actor_lr)
+
+  def forward(self, state):
+    """Compute mean and std for the policy."""
+    mean = self.model(state)
+    std = torch.exp(self.log_std)
+    return mean, std
 
   def get_action(self, state):
-    state = np.array(state)  # Ensure state is a NumPy array
-    mean = np.dot(state, self.actor_weights).item()
-    action = np.random.normal(mean, self.sigma)
-    return action, mean
+    state_tensor = torch.tensor(state, dtype=torch.float32)
+    mean, std = self.forward(state_tensor)
+    dist = torch.distributions.Normal(mean, std)
+    action = dist.sample()
+    return action.detach().numpy().flatten(), mean.detach().numpy().flatten()
 
-  def update_actor(self, state, action, advantage):
-    state = np.array(state)  # Ensure state is a NumPy array
-    mean = np.dot(state, self.actor_weights).item()
-    grad_log_pi = (action - mean) / (self.sigma**2) * state
-    self.actor_weights += self.actor_lr * advantage * grad_log_pi[:, np.newaxis]
+  def update(self, state, action, advantage):
+    """Update the policy using the advantage."""
+    state_tensor = torch.tensor(state, dtype=torch.float32)
+    mean, std = self.forward(state_tensor)
+    dist = torch.distributions.Normal(mean, std)
+
+    log_prob = dist.log_prob(torch.tensor(action, dtype=torch.float32))
+    actor_loss = -log_prob * advantage  # Maximize expected advantage
+
+    # Reduce actor_loss to a scalar (e.g., sum or mean)
+    actor_loss = actor_loss.sum()  # If multiple actions, sum over all dimensions
+
+    self.optimizer.zero_grad()
+    actor_loss.backward()
+    self.optimizer.step()
 
 
-class ActorCriticTrainer:
-  def __init__(self, env, actor_critic):
-    self.env = env
-    self.ac = actor_critic
+class ActorCriticContinuous:
+  def __init__(self, actor, critic):
+    self.actor = actor
+    self.critic = critic
 
-  def train(self, episodes=100, replay_frequency=1):
-    for episode in range(episodes):
-      state, _ = self.env.reset()
-      self.ac.critic.reset_traces()
-      self.ac.critic.clear_buffer()
+  def get_action(self, state):
+    """Get an action from the actor."""
+    return self.actor.get_action(state)
 
-      while True:
-        action, mean = self.ac.get_action(state)
-        next_state, reward, done, _, _ = self.env.step([action])
-        next_state = np.array(next_state)  # Use raw state values for continuous spaces
+  def compute_advantage(self, reward, next_state, state, done, gamma=0.99):
+    """Compute the advantage using the critic."""
+    state_value = self.critic.value(state)
+    next_state_value = self.critic.value(next_state)
+    target = reward + gamma * next_state_value * (1 - done)
+    advantage = target - state_value
+    return advantage, target
 
-        # Store transition and update critic
-        self.ac.critic.store_transition(state, reward, next_state, done)
-        self.ac.critic.update(state, reward, next_state, done)
+  def update(self, state, action, advantage):
+    """Update actor and critic."""
+    # Update the critic
+    reward = advantage + self.critic.value(state)
+    done = 0  # Assume not done for critic update
+    next_state = state  # Mock next_state for critic update
+    self.critic.update(state, reward, next_state, done)
 
-        # Compute advantage
-        td_error = reward + (1 - done) * self.ac.critic.value(next_state) - self.ac.critic.value(state)
+    # Update the actor
+    self.actor.update(state, action, advantage)
 
-        # Update actor using advantage
-        self.ac.update_actor(state, action, td_error)
+  def step(self, state, action, reward, next_state, done):
+    """Compute the advantage and update the actor and critic."""
+    self.critic.store_transition(state, reward, next_state, done=done)
+    self.critic.update(state, reward, next_state, done=done)
 
-        if done:
-          break
-        state = next_state
+    advantage, target = self.compute_advantage(reward, next_state, state, done)
 
-      if episode % replay_frequency == 0:
-        self.ac.critic.replay()
+    self.update(state, action, advantage)
 
-  def render_value_function(self):
-    values = self.ac.critic.get_values()
-    plt.plot(values, marker="o", label="Value Function")
-    plt.xlabel("State")
-    plt.ylabel("Value")
-    plt.title("Estimated Value Function")
-    plt.grid()
-    plt.legend()
-    plt.show()
+    self.critic.replay()
+
+
+class TOTDLR(BaseConvertStableBaselinesModel):
+  def __init__(self, env, alpha=0.01, gamma=0.99, lambda_=0.9, env_type="gym", num_envs=1):
+    super().__init__(env, env_type, num_envs)
+    self.alpha = alpha
+    self.gamma = gamma
+    self.lambda_ = lambda_
+
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
+
+    critic = TrueOnlineTDLambdaCompressedReplayModel(state_dim, alpha=alpha, lambd=lambda_, gamma=gamma)
+    actor = ActorNetwork(state_dim, action_dim)
+
+    self.model = ActorCriticContinuous(actor, critic)
+
+  def train_step(self, state, action, reward, next_state, next_action, done, info):
+    self.model.step(state, action, reward, next_state, done)
+
+  def predict(self, state):
+    action = self.model.get_action(state)
+    return action
+
+  def learn_episode_setup(self):
+    self.model.critic.reset_traces()
+    self.model.critic.clear_buffer()
+
+  def save(self, filename):
+    torch.save(self.model.actor.state_dict(), filename + "_actor.pth")
+    np.save(filename + "_critic.npy", self.model.critic.get_values())
+
+  def load(self, filename):
+    self.model.actor.load_state_dict(torch.load(filename + "_actor.pth"))
+    self.model.critic.weights = np.load(filename + "_critic.npy")
+
+
+class Model(BaseModel):
+  def __init__(self, env_name, num_envs=16, max_episode_steps=5000, reward_strategy="default", **kwargs):
+    """
+    Initialize the Model class specifically for PPO.
+    Args:
+        env_name (str): The name of the environment to train on.
+        num_envs (int): Number of parallel environments to use.
+        kwargs: Additional arguments to pass to the PPO initialization.
+    """
+    super().__init__(env_name, num_envs, max_episode_steps, reward_strategy, **kwargs)
+    self.model = TOTDLR(self.env, env_type=self.env_type, ** self.parameters)
 
 
 if __name__ == "__main__":
   env = gym.make("MountainCarContinuous-v0", render_mode="human")
-
-  # Use actual state and action dimensions from the environment
-  state_space = env.observation_space.shape[0]  # State space size = 2 (position, velocity)
-  action_space = env.action_space.shape[0]  # Action space size = 1 (continuous action)
-
   # Initialize critic and actor-critic models
-  critic = TrueOnlineTDLambdaCompressedReplayModel(state_space=state_space, alpha=0.1, lambd=0.9, v0=0.5)
-  actor_critic = ActorCriticContinuous(state_space=state_space, action_space=action_space, critic_model=critic)
-
-  # Train the Actor-Critic model
-  trainer = ActorCriticTrainer(env, actor_critic)
-  trainer.train(episodes=100)  # Train for 100 episodes
-  trainer.render_value_function()  # Visualize the critic's value function
+  totdlr = TOTDLR(env, alpha=0.01, gamma=0.99, lambda_=0.9)
+  totdlr.learn(1000, max_steps=1000, render_frequency=100)
