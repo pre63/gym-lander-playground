@@ -4,7 +4,7 @@ from models.sb import SBase
 
 
 class Model(SBase):
-  def __init__(self, env_name, num_envs=8, max_episode_steps=2000, reward_strategy="default", **kwargs):
+  def __init__(self, env_name, num_envs=16, max_episode_steps=5000, reward_strategy="default", **kwargs):
     """
     Initialize the Model class specifically for DDPG.
     Args:

@@ -66,7 +66,7 @@ def main():
 
   ModelClass = load_model(model_name)
 
-  model = ModelClass(env_name, num_envs=8, max_episode_steps=2000, reward_strategy=reward_strategy_name)
+  model = ModelClass(env_name, num_envs=16, max_episode_steps=5000, reward_strategy=reward_strategy_name)
 
   config = {
       "model": model_name,

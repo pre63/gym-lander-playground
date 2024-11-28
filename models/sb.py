@@ -28,7 +28,7 @@ def make_env(env_name, max_episode_steps=2000, reward_strategy="default"):
 
 
 class SBase:
-  def __init__(self, env_name, num_envs=512, max_episode_steps=5000, reward_strategy="default", model_type="vec", **kwargs):
+  def __init__(self, env_name, num_envs=16, max_episode_steps=5000, reward_strategy="default", model_type="vec", **kwargs):
     """
     Initialize the SBase class with a SubprocVecEnv.
     Args:
