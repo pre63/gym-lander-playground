@@ -33,7 +33,7 @@ def save_results_to_disk(results, folder_name):
 def run_model(model, total_timesteps, results_folder, trials=200):
   start_time = datetime.now()
 
-  model.train(total_timesteps=total_timesteps)
+  model.learn(total_timesteps=total_timesteps, progress_bar=True)
 
   end_time = datetime.now()
 

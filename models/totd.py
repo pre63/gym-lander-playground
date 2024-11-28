@@ -2,8 +2,11 @@ import numpy as np
 import gymnasium as gym
 from scipy import stats
 
+from models.base import BaseModel
+
 from success import check_success
 from telemetry import add_telemetry_overlay, add_success_failure_to_frames
+
 
 class TrueOnlineTDLambdaReplay:
   def __init__(self, alpha, gamma, lambda_, theta_init):
@@ -37,9 +40,9 @@ class TrueOnlineTDLambdaReplay:
     Update the weights based on a single transition.
 
     Parameters:
-    - phi_t: Feature vector of the current state.
+    - phi_t: Feature vector of the current state-action pair.
     - R_t: Reward received after taking the action.
-    - phi_t1: Feature vector of the next state.
+    - phi_t1: Feature vector of the next state-action pair.
     """
     V_t = np.dot(self.theta, phi_t)
     V_t1 = np.dot(self.theta, phi_t1)
@@ -64,137 +67,240 @@ class TrueOnlineTDLambdaReplay:
     self.V_old = V_t1
 
 
-class Model:
-  def __init__(self, env: gym.Env, alpha=0.1, gamma=0.95, lambda_=0.9):
-    """
-    Initialize the model as a wrapper for the environment and algorithm.
-    Args:
-        env (gym.Env): The environment to train on.
-        alpha (float): Learning rate.
-        gamma (float): Discount factor.
-        lambda_ (float): Trace decay parameter.
-    """
+# class TOTD:
+#   def __init__(self, env, alpha=0.01, gamma=0.99, lambda_=0.9, theta_init=None):
+#     self.env = env
+#     self.alpha = alpha
+#     self.gamma = gamma
+#     self.lambda_ = lambda_
+
+#     self.observation_dim = self.env.observation_space.shape[0]
+#     self.action_dim = self.env.action_space.shape[0]
+
+#     # Feature vector dimension: state_dim + action_dim
+#     self.feature_dim = self.observation_dim + self.action_dim
+
+#     # Initialize theta as a 1D weight vector for features
+#     self.theta_init = theta_init or np.zeros(self.feature_dim)
+#     self.model = TrueOnlineTDLambdaReplay(alpha, gamma, lambda_, self.theta_init)
+
+#   def state_action_features(self, state, action):
+#     state = np.asarray(state, dtype=np.float32).flatten()
+#     action = np.asarray(action, dtype=np.float32).flatten()
+#     assert len(action) == self.action_dim, f"Expected action dimension {self.action_dim}, got {len(action)}"
+#     return np.concatenate([state, action])
+
+
+#   def predict_action(self, state):
+#     sampled_actions = [self.env.action_space.sample() for _ in range(10)]
+#     q_values = [self.q_value(state, action) for action in sampled_actions]
+#     best_action = sampled_actions[np.argmax(q_values)]
+#     # Ensure the action matches the expected shape
+#     return np.clip(np.asarray(best_action, dtype=np.float32), self.env.action_space.low, self.env.action_space.high)
+
+
+#   def q_value(self, state, action):
+#     # Compute Q(s, a) as the dot product of theta and the feature vector
+#     phi = self.state_action_features(state, action)
+#     return np.dot(self.model.theta, phi)
+
+#   def learn(self, total_timesteps=1000, progress_bar=False):
+#     discount_timesteps = 0
+#     done = True
+
+#     while discount_timesteps < total_timesteps:
+#       if done:
+#         state, _ = self.env.reset()
+#         action = self.env.action_space.sample()  # Initial random action
+#         phi = self.state_action_features(state, action)
+#         done = False
+
+#       next_state, reward, terminated,_, _ = self.env.step(action)
+#       next_action = self.predict_action(next_state)
+#       next_phi = self.state_action_features(next_state, next_action)
+
+#       # Train step
+#       self.model.train_step(phi, reward, next_phi)
+
+#       # Update for the next timestep
+#       state, action, phi = next_state, next_action, next_phi
+#       discount_timesteps += 1
+#       done = terminated
+
+#       if progress_bar:
+#         print(f"\rProgress: {discount_timesteps}/{total_timesteps}", end="")
+
+#   def predict(self, state):
+#     """
+#     Predict the value of a state as the maximum Q(s, a) over possible actions.
+#     """
+#     sampled_actions = [self.env.action_space.sample() for _ in range(10)]
+#     q_values = [self.q_value(state, action) for action in sampled_actions]
+#     return max(q_values)
+
+#   def save(self, path):
+#     np.save(path, self.model.theta)
+
+#   def load(self, path):
+#     self.model.theta = np.load(path + ".npy")
+class GenericRLBase:
+  def __init__(self, env, env_type="gym", num_envs=1):
     self.env = env
-    state_dim = env.observation_space.shape[0]
-    theta_init = np.zeros(state_dim)
-    self.algorithm = TrueOnlineTDLambdaReplay(
-        alpha=alpha,
-        gamma=gamma,
-        lambda_=lambda_,
-        theta_init=theta_init
-    )
+    self.env_type = env_type
+    self.num_envs = num_envs
 
-    self.parameters = {
-        "alpha": alpha,
-        "gamma": gamma,
-        "lambda": lambda_
-    }
+    if hasattr(env.observation_space, "shape"):
+      self.observation_dim = env.observation_space.shape[0]
+    else:
+      raise ValueError("Unsupported observation space type.")
 
-  def train(self):
+    if hasattr(env.action_space, "shape"):
+      self.action_dim = env.action_space.shape[0]
+    else:
+      raise ValueError("Unsupported action space type.")
+
+  def state_action_features(self, state, action):
     """
-    Train the model for one episode and return the episode reward and history.
-    Returns:
-        episode_reward (float): Total reward obtained in the episode.
-        history (list): The history of the agent.
+    Combine state and action into a feature vector. Should be overridden by subclasses.
     """
-    state, _ = self.env.reset()
-    done = False
-    episode_reward = 0
-    history = []
+    raise NotImplementedError("state_action_features must be implemented by subclasses.")
 
-    cumulative_rewards = []
-    t = 0  # Time step
-
-    self.algorithm.reset_traces()
-
-    while not done:
-      action = self.select_action(state)
-      next_state, reward, terminated, truncated, info = self.env.step(action)
-      done = terminated or truncated
-
-      phi_t = np.array(state)
-      phi_t1 = np.array(next_state)
-      self.algorithm.train_step(phi_t, reward, phi_t1)
-
-      episode_reward += reward
-      history.append({
-          "state": state.tolist(),
-          "action": action.tolist(),
-          "reward": reward,
-          "episode_reward": episode_reward,
-          "next_state": next_state.tolist(),
-          "done": done
-      })
-
-      state = next_state
-
-    success = check_success(next_state, terminated)
-    return success, episode_reward, history
-
-  def select_action(self, state):
+  def predict_action(self, state):
     """
-    Select an action for a continuous action space using a Gaussian policy.
+    Predict the best action for a given state. Should be overridden by subclasses.
+    """
+    raise NotImplementedError("predict_action must be implemented by subclasses.")
 
+  def train_step(self, state, action, reward, next_state, next_action):
+    """
+    Perform a single training step. Should be overridden by subclasses.
+    """
+    raise NotImplementedError("train_step must be implemented by subclasses.")
+
+  def _process_single_env(self, total_timesteps, progress_bar):
+    discount_timesteps = 0
+    done = True
+
+    print("Training on a single environment...")
+
+    while discount_timesteps < total_timesteps:
+      if done:
+        state, _ = self.env.reset()
+        action = self.env.action_space.sample()
+        done = False
+
+      next_state, reward, terminated, _, _ = self.env.step(action)
+      next_action = self.predict_action(next_state)
+
+      self.train_step(state, action, reward, next_state, next_action)
+
+      state, action = next_state, next_action
+      discount_timesteps += 1
+      done = terminated
+
+      if progress_bar:
+        print(f"\rProgress: {discount_timesteps}/{total_timesteps}", end="")
+
+  def _process_multi_env(self, total_timesteps, progress_bar):
+    progress_bar = True
+    discount_timesteps = 0
+    dones = [True] * self.num_envs
+
+    print("Training on multiple environments...")
+
+    while discount_timesteps < total_timesteps:
+      if all(dones):
+        states = self.env.reset()
+        actions = np.array([self.env.action_space.sample() for _ in range(self.num_envs)])
+
+      next_states, rewards, dones, infos = self.env.step(actions)
+      next_actions = np.array([self.predict_action(next_states[i]) for i in range(self.num_envs)])
+
+      for i in range(self.num_envs):
+        print(states[i], actions[i], rewards[i], next_states[i], next_actions[i])
+        self.train_step(states[i], actions[i], rewards[i], next_states[i], next_actions[i])
+
+      states, actions = next_states, next_actions
+      discount_timesteps += self.num_envs
+
+      if progress_bar:
+        print(f"\rProgress: {discount_timesteps}/{total_timesteps}", end="")
+
+  def learn(self, total_timesteps=1000, progress_bar=False):
+    if self.env_type == "gym":
+      self._process_single_env(total_timesteps, progress_bar)
+    else:
+      self._process_multi_env(total_timesteps, progress_bar)
+
+  def predict(self, state):
+    """
+    Predict the value of a state or the best action. Should be overridden by subclasses.
+    """
+    raise NotImplementedError("predict must be implemented by subclasses.")
+
+
+class TOTD(GenericRLBase):
+  def __init__(self, env, alpha=0.01, gamma=0.99, lambda_=0.9, theta_init=None, env_type="gym", num_envs=1):
+    super().__init__(env, env_type, num_envs)
+    self.alpha = alpha
+    self.gamma = gamma
+    self.lambda_ = lambda_
+
+    self.feature_dim = self.observation_dim + self.action_dim
+    self.theta = theta_init or np.zeros(self.feature_dim)
+    self.model = TrueOnlineTDLambdaReplay(alpha, gamma, lambda_, self.theta)
+
+  def state_action_features(self, state, action):
+    state = np.asarray(state, dtype=np.float32).flatten()
+    action = np.asarray(action, dtype=np.float32).flatten()
+    return np.concatenate([state, action])
+
+  def predict_action(self, state):
+    print("Predicting action...")
+    sampled_actions = [self.env.action_space.sample() for _ in range(10)]
+    print(sampled_actions)
+    q_values = [self.q_value(state, action) for action in sampled_actions]
+    best_action = sampled_actions[np.argmax(q_values)]
+    return np.clip(np.asarray(best_action, dtype=np.float32), self.env.action_space.low, self.env.action_space.high)
+
+  def q_value(self, state, action):
+    phi = self.state_action_features(state, action)
+    return np.dot(self.theta, phi)
+
+  def train_step(self, state, action, reward, next_state, next_action):
+    phi = self.state_action_features(state, action)
+    next_phi = self.state_action_features(next_state, next_action)
+    self.model.train_step(phi, reward, next_phi)
+
+    
+
+
+class Model(BaseModel):
+  def __init__(self, env_name, num_envs=16, max_episode_steps=5000, reward_strategy="default", **kwargs):
+    """
+    Initialize the Model class specifically for PPO.
     Args:
-        state (np.ndarray): The current state of the environment.
-    Returns:
-        np.ndarray: The continuous action sampled from the policy.
+        env_name (str): The name of the environment to train on.
+        num_envs (int): Number of parallel environments to use.
+        kwargs: Additional arguments to pass to the PPO initialization.
     """
-    mean_action = self.compute_policy(state)  # Mean action
-    action = np.clip(
-        mean_action + np.random.normal(0, 0.1, size=mean_action.shape),
-        self.env.action_space.low,
-        self.env.action_space.high
-    )
-    return action
+    super().__init__(env_name, num_envs, max_episode_steps, reward_strategy, **kwargs)
+    self.model = TOTD(self.env, env_type=self.env_type, ** self.parameters)
 
-  def compute_policy(self, state):
-    """
-    Compute the mean action for the current policy.
 
-    Args:
-        state (np.ndarray): The current state of the environment.
-    Returns:
-        np.ndarray: The mean action based on the policy.
-    """
-    phi_state = np.array(state)
-    return np.dot(self.algorithm.theta, phi_state)
+if __name__ == "__main__":
+  # Single environment with TOTD
+  env = gym.make("LunarLanderContinuous-v3")
+  totd_model = TOTD(env, env_type="gym")
+  totd_model.learn(total_timesteps=1000)
 
-  def save(self, filename):
-    """
-    Save the model to a file.
-    Args:
-        filename (str): The name of the file to save the model to.
-    """
-    np.save(filename, self.algorithm.theta)
+  class ZTOTD(TOTD):
+    def __init__(self, env, alpha=0.005, gamma=0.95, lambda_=0.8, theta_init=None, env_type="gym", num_envs=1):
+      super().__init__(env, alpha, gamma, lambda_, theta_init, env_type, num_envs)
+      # Additional ZTOTD-specific initialization here
 
-  def load(self, filename):
-    """
-    Load the model from a file.
-    Args:
-        filename (str): The name of the file to load the model from.
-    """
-    self.algorithm.theta = np.load(filename + ".npy")
-
-  def evaluate(self, render=False):
-    state, _ = self.env.reset()
-    done = False
-    episode_reward = 0
-    frames = []
-
-    while not done:
-      action = self.select_action(state)
-      next_state, reward, terminated, truncated, info = self.env.step(action)
-      done = terminated or truncated
-
-      episode_reward += reward
-
-      if render:
-        frames.append(add_telemetry_overlay(self.env.render(), next_state))
-
-      state = next_state
-
-    success = check_success(next_state, terminated)
-    if render:
-      frames = add_success_failure_to_frames(frames, success)
-    return success, episode_reward, frames
+  # Multi-environment with ZTOTD
+  from stable_baselines3.common.vec_env import SubprocVecEnv
+  vec_env = SubprocVecEnv([lambda: gym.make("LunarLanderContinuous-v3") for _ in range(4)])
+  ztotd_model = ZTOTD(vec_env, env_type="vec", num_envs=4)
+  ztotd_model.learn(total_timesteps=1000)

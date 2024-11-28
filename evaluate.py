@@ -24,7 +24,7 @@ def get_env_and_model(results_folder):
 
   # Load the model
   model_class = load_model(model_name)
-  model = model_class(env_name, model_type="gym")
+  model = model_class(env_name, env_type="gym")
   model_path = os.path.join(results_folder, "model")
   model.load(model_path)
 
@@ -45,7 +45,7 @@ def render_sample(results_folder):
     done = False
 
     while not done:
-      action, _ = model.model.predict(state)
+      action, _ = model.predict(state)
       next_state, reward, terminated, truncated, info = env.step(action)
       done = terminated or truncated
 
@@ -110,7 +110,7 @@ def evaluate_model(results_folder, evaluation_trials):
     done = False
     rewards = []
     while not done:
-      action, _ = model.model.predict(state)
+      action, _ = model.predict(state)
       state, reward, terminated, truncated, info = env.step(action)
       done = terminated or truncated
 

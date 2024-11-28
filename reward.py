@@ -36,7 +36,7 @@ def proximity_reward(state, reward, action, done, info):
   """
   Reward strategy prioritizing proximity to the target and low velocity.
   """
-  x_position = observation[0]
+  x_position = state[0]
 
   if done:
     success = check_success(state, done)

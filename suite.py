@@ -75,7 +75,7 @@ def main():
 
   env_name = "LunarLanderContinuous-v3" if len(sys.argv) < 4 else sys.argv[3]
 
-  model_names = ["PPO", "SAC", "TD3", "TRPO", "DDPG"]
+  model_names = [ "TD3", "TRPO", "DDPG", "SAC", "PPO" ]
   for model_name in model_names:
     models = initiate_models(model_name, env_name, reward_strategy_name)
 

@@ -27,10 +27,10 @@ def make_env(env_name, max_episode_steps=2000, reward_strategy="default"):
   return _init
 
 
-class SBase:
-  def __init__(self, env_name, num_envs=16, max_episode_steps=5000, reward_strategy="default", model_type="vec", **kwargs):
+class BaseModel:
+  def __init__(self, env_name, num_envs=16, max_episode_steps=5000, reward_strategy="default", env_type="vec", **kwargs):
     """
-    Initialize the SBase class with a SubprocVecEnv.
+    Initialize the BaseModel class with a SubprocVecEnv.
     Args:
         env_name (str): The name of the environment to train on.
         num_envs (int): Number of parallel environments to use.
@@ -38,23 +38,23 @@ class SBase:
     """
     self.env_name = env_name
     self.num_envs = num_envs
-
-    if model_type == "vec":
+    self.env_type = env_type
+    if env_type == "vec":
       self.env = SubprocVecEnv([make_env(env_name, max_episode_steps, reward_strategy) for _ in range(num_envs)])
       self.env = VecMonitor(self.env)
-    elif model_type == "gym":
+    elif env_type == "gym":
       self.env = make_env(env_name, max_episode_steps, reward_strategy)()
 
     self.parameters = kwargs
     self.model = None  # To be defined in the subclass
 
-  def train(self, total_timesteps=1000):
+  def learn(self, total_timesteps=1000, progress_bar=False):
     """
     Train the model for the specified number of timesteps.
     Args:
         total_timesteps (int): Number of timesteps to train for.
     """
-    self.model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    self.model.learn(total_timesteps=total_timesteps, progress_bar=progress_bar)
 
   def save(self, filename):
     """
@@ -71,3 +71,13 @@ class SBase:
         filename (str): The name of the file to load.
     """
     self.model = self.model.load(filename)
+
+  def predict(self, state):
+    """
+    Predict the value of a state.
+    Args:
+        state (np.ndarray): The state to predict the value of.
+    Returns:
+        float: The value of the state.
+    """
+    return self.model.predict(state)

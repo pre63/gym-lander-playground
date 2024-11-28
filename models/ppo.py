@@ -1,9 +1,9 @@
 from stable_baselines3 import PPO
 
-from models.sb import SBase
+from models.base import BaseModel
 
 
-class Model(SBase):
+class Model(BaseModel):
   def __init__(self, env_name, num_envs=16, max_episode_steps=5000, reward_strategy="default", **kwargs):
     """
     Initialize the Model class specifically for PPO.
