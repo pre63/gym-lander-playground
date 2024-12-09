@@ -143,7 +143,9 @@ class BaseConvertStableBaselinesModel:
         print(f"\rProgress: {discounted_timesteps}/{total_timesteps}", end="")
 
   def _process_multi_env(self, total_timesteps, progress_bar):
-    progress_bar = True
+    successes = 0
+    episodes = self.num_envs
+    previous_rewards = np.zeros(self.num_envs)
     discounted_timesteps = 0
     dones = [True] * self.num_envs
 
@@ -151,22 +153,41 @@ class BaseConvertStableBaselinesModel:
 
     while discounted_timesteps < total_timesteps:
       if all(dones):
+        # Reset environments and initialize values
+        previous_rewards = np.zeros(self.num_envs)
         states = self.env.reset()
         self.learn_episode_setup()
         actions = np.array([self.env.action_space.sample() for _ in range(self.num_envs)])
-      
+
       next_states, rewards, dones, infos = self.env.step(actions)
 
+      # Calculate successes
+      for i in range(self.num_envs):
+        if rewards[i] - previous_rewards[i] > 199:  # Success condition
+          successes += 1
+        if dones[i]:  # Reset reward tracking for completed environments
+          previous_rewards[i] = 0
+          episodes += 1
+        else:  # Update cumulative rewards for ongoing environments
+          previous_rewards[i] += rewards[i]
+
+      # Predict next actions
       next_actions = np.array([self.predict(next_states[i])[0] for i in range(self.num_envs)])
 
+      # Train step for each environment
       for i in range(self.num_envs):
         self.train_step(states[i], actions[i], rewards[i], next_states[i], next_actions[i], dones[i], infos[i])
 
+      # Update state and action for the next step
       states, actions = next_states, next_actions
       discounted_timesteps += self.num_envs
 
+      # Progress bar
       if progress_bar:
-        print(f"\rProgress: {discounted_timesteps}/{total_timesteps}", end="")
+        success_rate = successes / episodes
+        print(f"\rProgress: {discounted_timesteps}/{total_timesteps}, "
+              f"Successes: {successes}, Success Rate: {success_rate:.2%}", end="")
+    print()  # Ensure newline after progress bar
 
   def learn(self, total_timesteps=1000, progress_bar=False):
     if self.env_type == "gym":

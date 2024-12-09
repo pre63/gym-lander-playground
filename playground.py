@@ -14,7 +14,7 @@ from models.utils import load_model
 
 def create_results_folder(model_name, config):
   timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-  folder_name = f"results/{model_name}-{timestamp}"
+  folder_name = f"results/{model_name}-{timestamp}".lower()
   os.makedirs(folder_name, exist_ok=True)
 
   # Save configuration to disk
@@ -33,7 +33,7 @@ def save_results_to_disk(results, folder_name):
 def run_model(model, total_timesteps, results_folder, trials=200):
   start_time = datetime.now()
 
-  model.learn(total_timesteps=total_timesteps, progress_bar=True)
+  model.learn(total_timesteps=total_timesteps, progress_bar=False)
 
   end_time = datetime.now()
 
@@ -63,6 +63,8 @@ def main():
   reward_strategy_name = sys.argv[3] if len(sys.argv) > 3 else "default"
 
   env_name = sys.argv[4] if len(sys.argv) > 4 else "LunarLanderContinuous-v3"
+
+  print(f"Running model '{model_name}' for {total_timesteps} timesteps with reward strategy '{reward_strategy_name}' on environment '{env_name}'")
 
   ModelClass = load_model(model_name)
 
