@@ -3,7 +3,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from itertools import product
 
-from models.iht import IHT, tiles
+from models._sarsa.iht import IHT, tiles
 from models.base import BaseModel, BaseConvertStableBaselinesModel
 
 
@@ -138,9 +138,6 @@ class SARSA(BaseConvertStableBaselinesModel):
     self.alpha = alpha
     self.gamma = gamma
     self.lambda_ = lambda_
-
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
 
     self.model = Sarsa(
         (env.action_space.low, env.action_space.high),
