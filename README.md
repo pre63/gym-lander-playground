@@ -1,90 +1,62 @@
-# Gym-Lander-Playground
+# Gymnasium Lunar Lander Evaluations (MAC, SARSA, AC)++
 
-This project provides a framework to train and evaluate reinforcement learning (RL) models using the Gymnasium library. It supports comparing models on metrics such as success rate, learning stability, and sample efficiency.
+This repository provides a framework for exploring and comparing reinforcement learning (RL) algorithms in continuous action spaces, focusing on both well-established methods like PPO and SAC and newer approaches such as Mean Actor-Critic (MAC) and Deep True Online TD(λ)-Replay (TOTDLR). By integrating these algorithms into a consistent evaluation pipeline, the repository enables detailed analysis of their performance across environments, particularly the LunarLanderContinuous-v3 task.
 
+## Overview
 
-## Future Work
-- Trial Gymnasium robotics environments.
-- 
+Reinforcement learning in continuous control settings poses unique challenges, particularly around stability, scalability, and efficiency. This repository combines standard baselines with experimental approaches to explore these aspects in greater depth. Algorithms like MAC and TOTDLR extend existing paradigms by incorporating mechanisms for variance reduction and replay, offering potentially improved performance in complex tasks. The LunarLanderContinuous-v3 environment provides a well-suited testing ground for these techniques, balancing complexity with interpretability.
+
+The inclusion of models like MAC, which explicitly leverages action value representations to reduce variance, and TOTDLR, which combines eligibility traces with replay for efficient planning, highlights efforts to bridge gaps between theoretical potential and practical application in RL. Established baselines such as PPO, SAC, and TD3 provide essential benchmarks for contextualizing results.
+
+## Algorithms
+
+### Experimental Models
+
+- **Mean Actor-Critic (MAC):** A policy gradient algorithm that uses all action values to compute gradients rather than relying solely on executed actions. This approach reduces gradient variance, improving learning stability and sample efficiency. The implementation follows Allen et al. ([paper](https://doi.org/10.48550/arXiv.1709.00503)).
+  
+- **Deep True Online TD(λ)-Replay (TOTDLR):** Combines eligibility traces with experience replay for model-free planning. This hybrid approach balances real-time learning with memory-based updates, as described by Altahhan ([paper](https://ieeexplore.ieee.org/document/9206608)).
+
+### Baseline Models
+
+- **PPO (Proximal Policy Optimization):** A widely-used policy gradient algorithm that ensures stability with clipped updates.
+- **SAC (Soft Actor-Critic):** An entropy-regularized method designed for efficient exploration in continuous control tasks.
+- **TD3 (Twin Delayed DDPG):** Optimized for deterministic policy updates in continuous spaces.
+- **TRPO (Trust Region Policy Optimization):** Constrains policy updates for stability and convergence.
+- **SARSA and Actor-Critic (AC):** Fundamental on-policy algorithms, including adaptations for continuous spaces.
 
 ## Features
 
-- Train reinforcement learning models with ease using a generic interface.
-- Save training results, including performance metrics and the best episode.
-- Replay the best episode for visual inspection of model performance.
-- Preconfigured with PPO as the default starting model.
-- Supports loading and evaluating models on different Gymnasium environments.
+The repository simplifies the evaluation of RL models by automating key processes such as training, logging, and replay. Training results include performance metrics, configuration details, and data from the best-performing episode, all saved in a structured format. Users can easily replay episodes to visually inspect the agent’s behavior, providing insights into how different models approach specific tasks.
 
-
-## Installation
-```bash
-pip install -r requirements.txt
-```
+The LunarLanderContinuous-v3 environment serves as the primary testing domain, but the framework supports any Gymnasium-compatible environment. This flexibility allows users to extend experiments to other domains, such as robotic control or high-dimensional state spaces.
 
 ## Usage
 
-### Training a Model
-
-To train the default PPO model on the default environment (`LunarLanderContinuous-v3`), run:
+To train a model, run:
 ```bash
 python playground.py ppo 10
 ```
-
-- `ppo`: The RL model to use (defaults to PPO).
-- `10`: Number of training episodes.
-
-To train on a different environment, specify the environment name as a third argument:
-```bash
-python playground.py ppo 10 CartPole-v1
-```
-
-Training results will be saved in a folder named `[model]-[datetime]` (e.g., `ppo-20231123-123456`).
-
-### Replaying the Best Episode
-
-To replay the best episode, use:
-```bash
-python replay.py [path-to-result-folder]
-```
-
-Example:
+This trains PPO for 10 episodes on the default environment. Results are saved in a timestamped folder. To replay the best episode:
 ```bash
 python replay.py results/ppo-20231123-123456
 ```
 
-### Analyzing Results
+For analysis, the included Jupyter Notebook provides tools to compare metrics like average rewards and stability across experiments.
 
-To generate a sortable table of results across all experiments, open a Jupyter Notebook and use the provided code snippet in the repository. This will create an overview of metrics like average reward, variance, and the best episode reward for each run.
+## Discussion
 
-## Example Workflow
+Algorithms like MAC and TOTDLR offer interesting extensions to traditional RL paradigms. MAC’s ability to reduce gradient variance can be especially valuable in environments with sparse or noisy rewards, where sample efficiency is critical. TOTDLR, by combining eligibility traces and replay, demonstrates the potential to improve learning stability and long-term planning. These techniques complement established methods like PPO and SAC, which excel in balancing stability and exploration.
 
-1. Train the PPO model on a Gymnasium environment:
-    ```bash
-    python playground.py ppo 20
-    ```
+The LunarLanderContinuous-v3 environment provides a practical testbed for evaluating these algorithms. Its continuous state and action spaces, coupled with clear success criteria, enable detailed comparisons across methods. While TOTDLR and MAC show promise, further work is needed to refine their implementations, particularly in addressing stability and scalability in more complex environments.
 
-2. Inspect the generated folder (e.g., `results/ppo-20231123-123456`) for:
-   - `config.json`: Configuration used during training.
-   - `results.json`: Training performance metrics.
-   - `best_episode.json`: Details of the best episode.
+## Future Directions
 
-3. Replay the best episode:
-    ```bash
-    python replay.py results/ppo-20231123-123456
-    ```
+There are several avenues for building on this work:
+- **Stability Improvements:** Further efforts are needed to enhance the numerical stability of experimental models like TOTDLR, particularly in environments with high-dimensional state spaces or sparse rewards.
+- **Dynamic Action Spaces:** Adapting these models to handle environments where the available actions change dynamically could extend their applicability.
+- **Robotics and Mujoco Tasks:** Expanding evaluations to robotic control environments or Mujoco-based tasks could provide insights into their performance in real-world-inspired domains.
+- **MAC for Continuous Domains:** While MAC is designed for discrete actions, extending it to continuous spaces could further reduce variance in policy gradients and improve learning efficiency.
+- **Noisy Environments:** Exploring how these models perform in environments with high observation or reward noise would offer a more comprehensive understanding of their robustness.
 
-4. Analyze results across runs by using the Jupyter Notebook cell provided.
-
-## Customization
-
-This framework allows you to:
-- Experiment with different Gymnasium environments by specifying the environment name when running `playground.py`.
-- Add new RL models by creating Python files in the `models/` directory. Implement a `Model` class with the required `train()` method.
-- Modify hyperparameters for PPO by editing the `models/ppo.py` file.
-
-## Dependencies
-
-All dependencies are listed in `requirements.txt`. Install them using:
-```bash
-pip install -r requirements.txt
-```
+## Conclusion
+This repository provides tools and implementations for experimenting with RL models in continuous control environments. By combining established baselines with experimental techniques, it lays a foundation for further exploration and refinement of RL methods. Researchers and practitioners can use it to test new ideas, compare algorithms, and gain insights into the complexities of reinforcement learning in dynamic settings.
